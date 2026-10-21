@@ -118,5 +118,44 @@ namespace WebLeadAI.Controllers
                 nameof(Details),
                 new { id });
         }
-    }
-}
+    
+    
+[HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RecalculateScores(
+    [FromServices] LeadQualificationService qualification)
+        {
+            var leads = await _context.Leads.ToListAsync();
+
+            int updated = 0;
+
+            foreach (var lead in leads)
+            {
+                var result = qualification.Evaluate(
+                    lead.CompanyName,
+                    lead.Description ?? "");
+
+                lead.AILeadScore = result.Score;
+
+                // Manuāli pieņemtos lēmumus nemainām.
+                if (lead.Status != "Qualified" &&
+                    lead.Status != "Rejected" &&
+                    lead.Status != "Contacted")
+                {
+                    lead.Status = result.IsQualified
+                        ? "NeedsReview"
+                        : "Rejected";
+                }
+
+                updated++;
+            }
+
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] =
+                $"Pārvērtēti {updated} projekti.";
+
+            return RedirectToAction(nameof(Index));
+        }
+
+    } }

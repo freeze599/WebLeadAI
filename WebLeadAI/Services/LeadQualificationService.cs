@@ -16,7 +16,12 @@ namespace WebLeadAI.Services
             text = Regex.Replace(
                 text, "<[^>]*>", " ");
 
-            text = text.ToLowerInvariant();
+            text = Regex.Replace(
+                text.ToLowerInvariant(),
+                @"\s+", " ");
+
+            int score = 0;
+            var reasons = new List<string>();
 
             string[] jobIndicators =
             {
@@ -28,50 +33,12 @@ namespace WebLeadAI.Services
                 "engineering manager",
                 "we are hiring",
                 "join our team",
-                "poste permanent",
                 "offre d'emploi",
                 "вакансія",
                 "повна зайнятість"
             };
 
-            string[] projectIndicators =
-            {
-                "website redesign",
-                "website development",
-                "build a website",
-                "create a website",
-                "need a website",
-                "freelance web developer",
-                "website modernization",
-                "landing page",
-                "e-commerce website",
-                "mājaslapas izstrāde",
-                "izveidot mājaslapu",
-                "mājaslapas modernizācija",
-                "vajadzīga mājaslapa",
-                "разработка сайта",
-                "создание сайта",
-                "редизайн сайта",
-                "création de site",
-                "création d'un site",
-                "refonte de site",
-                "site internet",
-                "site web",
-                "développement web",
-                "створення сайту",
-                "розробка сайту",
-                "редизайн сайту",
-                "вебсайт",
-                "інтернет-магазин"
-            };
-
-            bool isJob = jobIndicators.Any(
-                x => text.Contains(x));
-
-            bool isProject = projectIndicators.Any(
-                x => text.Contains(x));
-
-            if (isJob)
+            if (jobIndicators.Any(text.Contains))
             {
                 return new LeadQualificationResult
                 {
@@ -81,22 +48,110 @@ namespace WebLeadAI.Services
                 };
             }
 
-            if (isProject)
-            {
-                return new LeadQualificationResult
+            AddScore(
+                new[]
                 {
-                    IsQualified = true,
-                    Score = 70,
-                    Reason = "Iespējams mājaslapas pasūtījums"
-                };
-            }
+                    "website development",
+                    "build a website",
+                    "create a website",
+                    "need a website",
+                    "mājaslapas izstrāde",
+                    "izveidot mājaslapu",
+                    "création de site",
+                    "création d'un site",
+                    "створення сайту",
+                    "розробка сайту",
+                    "разработка сайта",
+                    "создание сайта"
+                },
+                40,
+                "Jaunas mājaslapas izstrāde");
+
+            AddScore(
+                new[]
+                {
+                    "website redesign",
+                    "website modernization",
+                    "refonte de site",
+                    "redesign website",
+                    "mājaslapas modernizācija",
+                    "редизайн сайта",
+                    "редизайн сайту"
+                },
+                35,
+                "Esošās mājaslapas modernizācija");
+
+            AddScore(
+                new[]
+                {
+                    "asp.net",
+                    ".net core",
+                    "c#",
+                    "blazor"
+                },
+                25,
+                "Atbilst ASP.NET / C# prasmēm");
+
+            AddScore(
+                new[]
+                {
+                    "landing page",
+                    "portfolio website",
+                    "site vitrine",
+                    "site portfolio",
+                    "site internet",
+                    "site web",
+                    "вебсайт",
+                    "mājaslapa"
+                },
+                20,
+                "Mājaslapas vai landing page projekts");
+
+            AddScore(
+                new[]
+                {
+                    "linux server",
+                    "nginx",
+                    "vps",
+                    "deployment",
+                    "hosting setup"
+                },
+                15,
+                "Servera uzstādīšanas darbi");
+
+            AddScore(
+                new[]
+                {
+                    "wordpress",
+                    "woocommerce",
+                    "shopify",
+                    "prestashop"
+                },
+                10,
+                "CMS vai e-komercijas projekts");
+
+            score = Math.Min(score, 100);
 
             return new LeadQualificationResult
             {
-                IsQualified = false,
-                Score = 0,
-                Reason = "Nav pietiekamu atbilstības pazīmju"
+                IsQualified = score >= 20,
+                Score = score,
+                Reason = reasons.Count > 0
+                    ? string.Join("; ", reasons)
+                    : "Nav atrastas atbilstības pazīmes"
             };
+
+            void AddScore(
+                string[] keywords,
+                int points,
+                string reason)
+            {
+                if (keywords.Any(text.Contains))
+                {
+                    score += points;
+                    reasons.Add(reason);
+                }
+            }
         }
     }
 

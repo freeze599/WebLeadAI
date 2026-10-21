@@ -1,0 +1,40 @@
+﻿@model IEnumerable<WebLeadAI.Models.Lead>
+
+@{
+    ViewData["Title"] = "Potenciālie klienti";
+}
+
+<h2>WebLead AI — Potenciālie klienti</h2>
+
+<p>Kopā atrasti: @Model.Count()</p>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Uzņēmums</th>
+            <th>Mājaslapa</th>
+            <th>Avots</th>
+            <th>AI vērtējums</th>
+            <th>Statuss</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var lead in Model)
+        {
+            <tr>
+                <td>@lead.CompanyName</td>
+                <td>@lead.Website</td>
+                <td>@lead.SourceType</td>
+                <td>@lead.AILeadScore</td>
+                <td>@lead.Status</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (!Model.Any())
+{
+    <div class="alert alert-info">
+        Pagaidām nav atrasts neviens klients.
+    </div>
+}

@@ -18,6 +18,10 @@ namespace WebLeadAI.Services
             {
                 "FreelanceUA",
                 "https://freelance.ua/orders/rss?t=1&cat_id=17&sub_id=0"
+            },
+            {
+                "Freelancer",
+                "https://www.freelancer.com/rss.xml"
             }
         };
 
@@ -37,6 +41,10 @@ namespace WebLeadAI.Services
             {
                 try
                 {
+                    _logger.LogInformation(
+                        "Sāk RSS avota pārbaudi: {Source}",
+                        feed.Key);
+
                     using var response =
                         await _httpClient.GetAsync(feed.Value);
 
@@ -59,6 +67,8 @@ namespace WebLeadAI.Services
 
                     if (syndicationFeed == null)
                         continue;
+
+                    int count = 0;
 
                     foreach (var item in syndicationFeed.Items)
                     {
@@ -100,11 +110,14 @@ namespace WebLeadAI.Services
                             Source = feed.Key,
                             PublishedAt = publishedAt
                         });
+
+                        count++;
                     }
 
                     _logger.LogInformation(
-                        "RSS avots {Source}: nolasīšana pabeigta.",
-                        feed.Key);
+                        "RSS avots {Source}: nolasīti {Count} ieraksti.",
+                        feed.Key,
+                        count);
                 }
                 catch (Exception ex) when (
                     ex is HttpRequestException ||
@@ -114,7 +127,7 @@ namespace WebLeadAI.Services
                 {
                     _logger.LogWarning(
                         ex,
-                        "Neizdevās nolasīt RSS avotu {Source}",
+                        "RSS avots {Source} nav pieejams.",
                         feed.Key);
                 }
             }
@@ -129,7 +142,6 @@ namespace WebLeadAI.Services
         public string Description { get; set; } = "";
         public string Url { get; set; } = "";
         public string Source { get; set; } = "";
-
         public DateTime? PublishedAt { get; set; }
     }
 }

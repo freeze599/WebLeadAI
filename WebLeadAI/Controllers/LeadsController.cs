@@ -25,7 +25,8 @@ namespace WebLeadAI.Controllers
             string? search,
             string? status,
             string? source,
-            string? sort)
+            string? sort,
+            string? age)
         {
             var allLeads = await _context.Leads
                 .AsNoTracking()
@@ -49,6 +50,7 @@ namespace WebLeadAI.Controllers
             ViewBag.Status = status ?? "";
             ViewBag.Source = source ?? "";
             ViewBag.Sort = sort ?? "score";
+            ViewBag.Age = age ?? "";
 
             IEnumerable<Lead> leads = allLeads;
 
@@ -77,6 +79,26 @@ namespace WebLeadAI.Controllers
                         StringComparison.OrdinalIgnoreCase));
             }
 
+            DateTime now = DateTime.UtcNow;
+
+            leads = age switch
+            {
+                "7" => leads.Where(l =>
+                    l.PublishedAt.HasValue &&
+                    l.PublishedAt.Value >= now.AddDays(-7) &&
+                    l.PublishedAt.Value <= now),
+
+                "30" => leads.Where(l =>
+                    l.PublishedAt.HasValue &&
+                    l.PublishedAt.Value >= now.AddDays(-30) &&
+                    l.PublishedAt.Value <= now),
+
+                "unknown" => leads.Where(l =>
+                    !l.PublishedAt.HasValue),
+
+                _ => leads
+            };
+
             leads = sort switch
             {
                 "newest" => leads
@@ -84,6 +106,10 @@ namespace WebLeadAI.Controllers
 
                 "oldest" => leads
                     .OrderBy(l => l.CreatedAt),
+
+                "published" => leads
+                    .OrderByDescending(l => l.PublishedAt.HasValue)
+                    .ThenByDescending(l => l.PublishedAt),
 
                 "score_asc" => leads
                     .OrderBy(l => l.AILeadScore)
@@ -217,9 +243,6 @@ namespace WebLeadAI.Controllers
                     lead.Description ?? "");
 
                 lead.AILeadScore = result.Score;
-
-                // Pārvērtējam punktus, bet nemainām
-                // iepriekš noteiktos statusus.
             }
 
             await _context.SaveChangesAsync();

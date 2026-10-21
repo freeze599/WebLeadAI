@@ -9,6 +9,7 @@
     string status = ViewBag.Status ?? "";
     string source = ViewBag.Source ?? "";
     string sort = ViewBag.Sort ?? "score";
+    string age = ViewBag.Age ?? "";
 
     var sources = ViewBag.Sources as List<string>
         ?? new List<string>();
@@ -19,13 +20,15 @@
     <div class="d-flex justify-content-between
         align-items-start mb-4">
         <div>
-            <h2 class="fw-bold">
-                WebLeadAI — Potenciālie klienti
-            </h2>
+            <div>
+                <h2 class="fw-bold">
+                    WebLeadAI — Potenciālie klienti
+                </h2>
 
-            <p class="text-muted">
-                Starptautisko projektu meklēšana un atlase
-            </p>
+                <p class="text-muted">
+                    Starptautisko projektu meklēšana un atlase
+                </p>
+            </div>
         </div>
 
         <span class="badge bg-primary fs-6">
@@ -49,8 +52,7 @@
             </button>
         </form>
 
-        <form asp-action="RecalculateScores"
-              method="post">
+        <form asp-action="RecalculateScores" method="post">
             @Html.AntiForgeryToken()
 
             <button type="submit"
@@ -122,9 +124,7 @@
                   class="row g-3 align-items-end">
 
                 <div class="col-md-4">
-                    <label class="form-label">
-                        Meklēt
-                    </label>
+                    <label class="form-label">Meklēt</label>
 
                     <input type="text"
                            name="search"
@@ -134,56 +134,23 @@
                 </div>
 
                 <div class="col-md-2">
-                    <label class="form-label">
-                        Statuss
-                    </label>
+                    <label class="form-label">Statuss</label>
 
-                    <select name="status"
-                            class="form-select">
-
-                        <option value="">
-                            Visi statusi
-                        </option>
-
-                        <option value="New"
-                                selected="@(status == "New")">
-                            New
-                        </option>
-
-                        <option value="NeedsReview"
-                                selected="@(status == "NeedsReview")">
-                            NeedsReview
-                        </option>
-
-                        <option value="Qualified"
-                                selected="@(status == "Qualified")">
-                            Qualified
-                        </option>
-
-                        <option value="Rejected"
-                                selected="@(status == "Rejected")">
-                            Rejected
-                        </option>
-
-                        <option value="Contacted"
-                                selected="@(status == "Contacted")">
-                            Contacted
-                        </option>
-
+                    <select name="status" class="form-select">
+                        <option value="">Visi statusi</option>
+                        <option value="New" selected="@(status == "New")">New</option>
+                        <option value="NeedsReview" selected="@(status == "NeedsReview")">NeedsReview</option>
+                        <option value="Qualified" selected="@(status == "Qualified")">Qualified</option>
+                        <option value="Rejected" selected="@(status == "Rejected")">Rejected</option>
+                        <option value="Contacted" selected="@(status == "Contacted")">Contacted</option>
                     </select>
                 </div>
 
                 <div class="col-md-2">
-                    <label class="form-label">
-                        Avots
-                    </label>
+                    <label class="form-label">Avots</label>
 
-                    <select name="source"
-                            class="form-select">
-
-                        <option value="">
-                            Visi avoti
-                        </option>
+                    <select name="source" class="form-select">
+                        <option value="">Visi avoti</option>
 
                         @foreach (var item in sources)
                         {
@@ -192,38 +159,45 @@
                                 @item
                             </option>
                         }
-
                     </select>
                 </div>
 
                 <div class="col-md-2">
-                    <label class="form-label">
-                        Kārtošana
-                    </label>
+                    <label class="form-label">Publicēts</label>
 
-                    <select name="sort"
-                            class="form-select">
+                    <select name="age" class="form-select">
+                        <option value="">Jebkurā laikā</option>
+                        <option value="7" selected="@(age == "7")">
+                            Pēdējās 7 dienās
+                        </option>
+                        <option value="30" selected="@(age == "30")">
+                            Pēdējās 30 dienās
+                        </option>
+                        <option value="unknown" selected="@(age == "unknown")">
+                            Datums nav zināms
+                        </option>
+                    </select>
+                </div>
 
-                        <option value="score"
-                                selected="@(sort == "score")">
+                <div class="col-md-2">
+                    <label class="form-label">Kārtošana</label>
+
+                    <select name="sort" class="form-select">
+                        <option value="score" selected="@(sort == "score")">
                             Labākais vērtējums
                         </option>
-
-                        <option value="score_asc"
-                                selected="@(sort == "score_asc")">
+                        <option value="score_asc" selected="@(sort == "score_asc")">
                             Zemākais vērtējums
                         </option>
-
-                        <option value="newest"
-                                selected="@(sort == "newest")">
-                            Jaunākie
+                        <option value="newest" selected="@(sort == "newest")">
+                            Jaunākie pievienotie
                         </option>
-
-                        <option value="oldest"
-                                selected="@(sort == "oldest")">
-                            Vecākie
+                        <option value="oldest" selected="@(sort == "oldest")">
+                            Vecākie pievienotie
                         </option>
-
+                        <option value="published" selected="@(sort == "published")">
+                            Jaunākie publicētie
+                        </option>
                     </select>
                 </div>
 
@@ -240,7 +214,6 @@
                 </div>
 
             </form>
-
         </div>
     </div>
 
@@ -264,13 +237,13 @@
                         <th>Projekts</th>
                         <th>Avots</th>
                         <th>Vērtējums</th>
+                        <th>Publicēts</th>
                         <th>Statuss</th>
                         <th>Darbības</th>
                     </tr>
                 </thead>
 
                 <tbody>
-
                     @foreach (var lead in leads)
                     {
                         string color = lead.Status switch
@@ -313,6 +286,24 @@
                             </td>
 
                             <td>
+                                @if (lead.PublishedAt.HasValue)
+                                {
+                                    <span>
+
+                                        @(lead.PublishedAt.Value.ToLocalTime().ToString("dd.MM.yyyy"))
+
+                                        .ToString("dd.MM.yyyy")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">
+                                        Nav zināms
+                                    </span>
+                                }
+                            </td>
+
+                            <td>
                                 <span class="badge bg-@color">
                                     @lead.Status
                                 </span>
@@ -331,15 +322,13 @@
                     @if (!leads.Any())
                     {
                         <tr>
-                            <td colspan="5"
+                            <td colspan="6"
                                 class="text-center text-muted py-4">
                                 Nav projektu, kas atbilst filtriem.
                             </td>
                         </tr>
                     }
-
                 </tbody>
-
             </table>
         </div>
     </div>

@@ -1,0 +1,105 @@
+﻿@model WebLeadAI.Models.Lead
+
+@{
+    ViewData["Title"] = "Pievienot klientu";
+}
+
+<h2>Pievienot potenciālo klientu</h2>
+
+<form asp-controller="Leads"
+      asp-action="Create"
+      method="post">
+
+    @Html.AntiForgeryToken()
+
+    <div asp-validation-summary="ModelOnly"
+         class="text-danger"></div>
+
+    <div class="mb-3">
+        <label asp-for="CompanyName"
+               class="form-label">
+            Uzņēmuma nosaukums
+        </label>
+
+        <input asp-for="CompanyName"
+               class="form-control" />
+
+        <span asp-validation-for="CompanyName"
+              class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Website"
+               class="form-label">
+            Mājaslapa
+        </label>
+
+        <input asp-for="Website"
+               class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Email"
+               class="form-label">
+            E-pasts
+        </label>
+
+        <input asp-for="Email"
+               class="form-control" />
+
+        <span asp-validation-for="Email"
+              class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="SourceUrl"
+               class="form-label">
+            Sludinājuma vai avota saite
+        </label>
+
+        <input asp-for="SourceUrl"
+               class="form-control" />
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="SourceType"
+               class="form-label">
+            Avota tips
+        </label>
+
+        <select asp-for="SourceType"
+                class="form-select">
+            <option value="Advertisement">
+                Sludinājums
+            </option>
+            <option value="WebsiteAudit">
+                Mājaslapas analīze
+            </option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Description"
+               class="form-label">
+            Apraksts
+        </label>
+
+        <textarea asp-for="Description"
+                  class="form-control"
+                  rows="4"></textarea>
+    </div>
+
+    <button type="submit"
+            class="btn btn-primary">
+        Saglabāt klientu
+    </button>
+
+    <a asp-action="Index"
+       class="btn btn-secondary">
+        Atpakaļ
+    </a>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

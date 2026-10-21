@@ -6,6 +6,23 @@
 
 <h2>WebLead AI — Potenciālie klienti</h2>
 
+
+<p>
+    <a asp-controller="Leads"
+       asp-action="Create"
+       class="btn btn-primary">
+        + Pievienot klientu
+    </a>
+</p>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["Success"]
+    </div>
+}
+
+
 <p>Kopā atrasti: @Model.Count()</p>
 
 <table class="table table-striped">

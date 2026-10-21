@@ -2,56 +2,215 @@
 
 @{
     ViewData["Title"] = "Potenciālie klienti";
+    var leads = Model.ToList();
 }
 
-<h2>WebLead AI — Potenciālie klienti</h2>
+<div class="container mt-4">
 
+    <!-- Lapas virsraksts -->
+    <div class="d-flex justify-content-between
+        align-items-center mb-4">
 
-<p>
-    <a asp-controller="Leads"
-       asp-action="Create"
-       class="btn btn-primary">
-        + Pievienot klientu
-    </a>
-</p>
+        <div>
+            <h2 class="fw-bold">
+                WebLead AI — Potenciālie klienti
+            </h2>
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">
-        @TempData["Success"]
+            <p class="text-muted mb-0">
+                Atrastie mājaslapu izstrādes
+                potenciālie pasūtītāji
+            </p>
+        </div>
+
+        <span class="badge bg-primary fs-6">
+            Kopā: @leads.Count
+        </span>
     </div>
-}
 
+    <!-- Darbību pogas -->
+    <div class="d-flex gap-2 mb-4">
 
-<p>Kopā atrasti: @Model.Count()</p>
+        <a asp-controller="Leads"
+           asp-action="Create"
+           class="btn btn-primary">
+            + Pievienot klientu
+        </a>
 
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Uzņēmums</th>
-            <th>Mājaslapa</th>
-            <th>Avots</th>
-            <th>AI vērtējums</th>
-            <th>Statuss</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var lead in Model)
-        {
-            <tr>
-                <td>@lead.CompanyName</td>
-                <td>@lead.Website</td>
-                <td>@lead.SourceType</td>
-                <td>@lead.AILeadScore</td>
-                <td>@lead.Status</td>
-            </tr>
-        }
-    </tbody>
-</table>
+        <form asp-controller="Leads"
+              asp-action="Discover"
+              method="post">
 
-@if (!Model.Any())
-{
-    <div class="alert alert-info">
-        Pagaidām nav atrasts neviens klients.
+            @Html.AntiForgeryToken()
+
+            <button type="submit"
+                    class="btn btn-success">
+                🔎 Meklēt jaunus klientus
+            </button>
+        </form>
+
     </div>
-}
+
+    <!-- Paziņojumi -->
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    <!-- Klientu tabula -->
+    <div class="card shadow-sm">
+
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                Klientu saraksts
+            </h5>
+        </div>
+
+        <div class="card-body p-0">
+
+            <div class="table-responsive">
+
+                <table class="table table-hover
+                    table-striped mb-0">
+
+                    <thead class="table-light">
+                        <tr>
+                            <th>Uzņēmums</th>
+                            <th>Mājaslapa</th>
+                            <th>Avots</th>
+                            <th>AI vērtējums</th>
+                            <th>Statuss</th>
+                            <th>Sludinājums</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var lead in leads)
+                        {
+                            <tr>
+                                <td class="fw-semibold">
+                                    @lead.CompanyName
+                                </td>
+
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(
+                                        lead.Website))
+                                    {
+                                        <span>
+                                            @lead.Website
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            Nav norādīta
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (lead.SourceType ==
+                                        "Advertisement")
+                                    {
+                                        <span class="badge bg-info
+                                            text-dark">
+                                            Sludinājums
+                                        </span>
+                                    }
+                                    else if (lead.SourceType ==
+                                             "WebsiteAudit")
+                                    {
+                                        <span class="badge bg-warning
+                                            text-dark">
+                                            Mājaslapas analīze
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">
+                                            @lead.SourceType
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        @lead.AILeadScore / 100
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @if (lead.Status == "New")
+                                    {
+                                        <span class="badge bg-primary">
+                                            Jauns
+                                        </span>
+                                    }
+                                    else if (lead.Status == "Contacted")
+                                    {
+                                        <span class="badge bg-success">
+                                            Uzrunāts
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">
+                                            @lead.Status
+                                        </span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @{
+                                        var validSourceUrl =
+                                            Uri.TryCreate(
+                                                lead.SourceUrl,
+                                                UriKind.Absolute,
+                                                out var sourceUri)
+                                            && (sourceUri!.Scheme ==
+                                                Uri.UriSchemeHttps
+                                                || sourceUri.Scheme ==
+                                                Uri.UriSchemeHttp);
+                                    }
+
+                                    @if (validSourceUrl)
+                                    {
+                                        <a href="@sourceUri"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="btn btn-sm
+                                            btn-outline-primary">
+                                            Atvērt avotu ↗
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">
+                                            Nav saites
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            @if (!leads.Any())
+            {
+                <div class="alert alert-info m-3">
+                    Pagaidām nav atrasts neviens klients.
+                    Nospied "Meklēt jaunus klientus",
+                    lai sāktu meklēšanu.
+                </div>
+            }
+
+        </div>
+    </div>
+
+</div>

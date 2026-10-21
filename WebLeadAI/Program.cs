@@ -28,6 +28,9 @@ builder.Services.AddHttpClient<
             "WebLeadAI/1.0");
     });
 
+builder.Services.AddScoped<
+    WebLeadAI.Services.LeadQualificationService>();
+
 
 var app = builder.Build();
 

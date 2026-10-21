@@ -9,43 +9,40 @@ namespace WebLeadAI.Services
     {
         private readonly AppDbContext _context;
         private readonly RssLeadSourceService _rssService;
+        private readonly LeadQualificationService _qualification;
 
         public LeadDiscoveryService(
             AppDbContext context,
-            RssLeadSourceService rssService)
+            RssLeadSourceService rssService,
+            LeadQualificationService qualification)
         {
             _context = context;
             _rssService = rssService;
+            _qualification = qualification;
         }
 
         public async Task<int> DiscoverLeadsAsync()
         {
+
+           
+
             var items = await _rssService.GetLeadsAsync();
 
             int added = 0;
 
-            string[] keywords =
-            {
-                "website development",
-                "web developer",
-                "web design",
-                "asp.net",
-                "full stack",
-                "full-stack",
-                "frontend",
-                "front-end"
-            };
+            
 
             foreach (var item in items)
             {
-                string content =
-                    (item.Title + " " + item.Description)
-                    .ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(item.Url))
+                    continue;
 
-                bool relevant = keywords.Any(keyword =>
-                    content.Contains(keyword));
+                var result = _qualification.Evaluate(
+                    item.Title,
+                    item.Description);
 
-                if (!relevant)
+                // Saglabājam tikai iespējamos pasūtījumus
+                if (!result.IsQualified)
                     continue;
 
                 bool exists = await _context.Leads
@@ -63,8 +60,8 @@ namespace WebLeadAI.Services
                     SourceUrl = item.Url,
                     SourceType = "Advertisement",
                     Description = item.Description,
-                    Status = "New",
-                    AILeadScore = 0,
+                    Status = "NeedsReview",
+                    AILeadScore = result.Score,
                     CreatedAt = DateTime.UtcNow
                 };
 

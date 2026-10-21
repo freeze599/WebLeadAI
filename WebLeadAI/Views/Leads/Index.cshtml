@@ -2,7 +2,16 @@
 
 @{
     ViewData["Title"] = "Potenciālie klienti";
+
     var leads = Model.ToList();
+
+    string search = ViewBag.Search ?? "";
+    string status = ViewBag.Status ?? "";
+    string source = ViewBag.Source ?? "";
+    string sort = ViewBag.Sort ?? "score";
+
+    var sources = ViewBag.Sources as List<string>
+        ?? new List<string>();
 }
 
 <div class="container py-4">
@@ -15,12 +24,12 @@
             </h2>
 
             <p class="text-muted">
-                Atrastie mājaslapu izstrādes pasūtījumi
+                Starptautisko projektu meklēšana un atlase
             </p>
         </div>
 
         <span class="badge bg-primary fs-6">
-            Kopā: @leads.Count
+            Kopā: @ViewBag.TotalCount
         </span>
     </div>
 
@@ -40,7 +49,8 @@
             </button>
         </form>
 
-        <form asp-action="RecalculateScores" method="post">
+        <form asp-action="RecalculateScores"
+              method="post">
             @Html.AntiForgeryToken()
 
             <button type="submit"
@@ -48,7 +58,6 @@
                 ↻ Pārvērtēt projektus
             </button>
         </form>
-
 
     </div>
 
@@ -62,54 +71,40 @@
     <div class="row g-3 mb-4">
 
         <div class="col-md-3">
-            <div class="card border-0 bg-light">
+            <div class="card bg-light border-0">
                 <div class="card-body">
-                    <div class="text-muted">
-                        Visi ieraksti
-                    </div>
-                    <h3>@leads.Count</h3>
+                    <div class="text-muted">Visi ieraksti</div>
+                    <h3>@ViewBag.TotalCount</h3>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 bg-light">
+            <div class="card bg-light border-0">
                 <div class="card-body">
-                    <div class="text-muted">
-                        Jāpārskata
-                    </div>
-                    <h3>
-                        @leads.Count(l =>
-                            l.Status == "NeedsReview"
-                            || l.Status == "New")
-                    </h3>
+                    <div class="text-muted">Jāpārskata</div>
+                    <h3>@ViewBag.ReviewCount</h3>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 bg-light">
+            <div class="card bg-light border-0">
                 <div class="card-body">
-                    <div class="text-muted">
-                        Apstiprināti
-                    </div>
+                    <div class="text-muted">Apstiprināti</div>
                     <h3 class="text-success">
-                        @leads.Count(l =>
-                            l.Status == "Qualified")
+                        @ViewBag.QualifiedCount
                     </h3>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 bg-light">
+            <div class="card bg-light border-0">
                 <div class="card-body">
-                    <div class="text-muted">
-                        Noraidīti
-                    </div>
+                    <div class="text-muted">Noraidīti</div>
                     <h3 class="text-danger">
-                        @leads.Count(l =>
-                            l.Status == "Rejected")
+                        @ViewBag.RejectedCount
                     </h3>
                 </div>
             </div>
@@ -117,9 +112,147 @@
 
     </div>
 
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+
+            <h5 class="mb-3">Projektu filtrēšana</h5>
+
+            <form method="get"
+                  asp-action="Index"
+                  class="row g-3 align-items-end">
+
+                <div class="col-md-4">
+                    <label class="form-label">
+                        Meklēt
+                    </label>
+
+                    <input type="text"
+                           name="search"
+                           value="@search"
+                           class="form-control"
+                           placeholder="ASP.NET, website, redesign..." />
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">
+                        Statuss
+                    </label>
+
+                    <select name="status"
+                            class="form-select">
+
+                        <option value="">
+                            Visi statusi
+                        </option>
+
+                        <option value="New"
+                                selected="@(status == "New")">
+                            New
+                        </option>
+
+                        <option value="NeedsReview"
+                                selected="@(status == "NeedsReview")">
+                            NeedsReview
+                        </option>
+
+                        <option value="Qualified"
+                                selected="@(status == "Qualified")">
+                            Qualified
+                        </option>
+
+                        <option value="Rejected"
+                                selected="@(status == "Rejected")">
+                            Rejected
+                        </option>
+
+                        <option value="Contacted"
+                                selected="@(status == "Contacted")">
+                            Contacted
+                        </option>
+
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">
+                        Avots
+                    </label>
+
+                    <select name="source"
+                            class="form-select">
+
+                        <option value="">
+                            Visi avoti
+                        </option>
+
+                        @foreach (var item in sources)
+                        {
+                            <option value="@item"
+                                    selected="@(source == item)">
+                                @item
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">
+                        Kārtošana
+                    </label>
+
+                    <select name="sort"
+                            class="form-select">
+
+                        <option value="score"
+                                selected="@(sort == "score")">
+                            Labākais vērtējums
+                        </option>
+
+                        <option value="score_asc"
+                                selected="@(sort == "score_asc")">
+                            Zemākais vērtējums
+                        </option>
+
+                        <option value="newest"
+                                selected="@(sort == "newest")">
+                            Jaunākie
+                        </option>
+
+                        <option value="oldest"
+                                selected="@(sort == "oldest")">
+                            Vecākie
+                        </option>
+
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Filtrēt
+                    </button>
+
+                    <a asp-action="Index"
+                       class="btn btn-outline-secondary">
+                        Notīrīt
+                    </a>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+
     <div class="card shadow-sm">
-        <div class="card-header bg-white py-3">
+
+        <div class="card-header bg-white py-3
+            d-flex justify-content-between">
             <h5 class="mb-0">Projektu saraksts</h5>
+
+            <span class="text-muted">
+                Atrasti: @leads.Count
+            </span>
         </div>
 
         <div class="table-responsive">
@@ -148,6 +281,16 @@
                             _ => "secondary"
                         };
 
+                        string host = "Manual";
+
+                        if (Uri.TryCreate(
+                            lead.SourceUrl,
+                            UriKind.Absolute,
+                            out var uri))
+                        {
+                            host = uri.Host.Replace("www.", "");
+                        }
+
                         <tr>
                             <td style="max-width:400px;
                                 overflow-wrap:anywhere;">
@@ -159,7 +302,7 @@
 
                             <td>
                                 <span class="badge bg-info text-dark">
-                                    @lead.SourceType
+                                    @host
                                 </span>
                             </td>
 
@@ -190,12 +333,13 @@
                         <tr>
                             <td colspan="5"
                                 class="text-center text-muted py-4">
-                                Pagaidām nav atrastu projektu.
+                                Nav projektu, kas atbilst filtriem.
                             </td>
                         </tr>
                     }
 
                 </tbody>
+
             </table>
         </div>
     </div>

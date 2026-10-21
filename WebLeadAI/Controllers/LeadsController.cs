@@ -21,14 +21,98 @@ namespace WebLeadAI.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(
+            string? search,
+            string? status,
+            string? source,
+            string? sort)
         {
-            var leads = await _context.Leads
+            var allLeads = await _context.Leads
                 .AsNoTracking()
-                .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync();
 
-            return View(leads);
+            ViewBag.TotalCount = allLeads.Count;
+            ViewBag.ReviewCount = allLeads.Count(l =>
+                l.Status == "NeedsReview" || l.Status == "New");
+            ViewBag.QualifiedCount = allLeads.Count(l =>
+                l.Status == "Qualified");
+            ViewBag.RejectedCount = allLeads.Count(l =>
+                l.Status == "Rejected");
+
+            ViewBag.Sources = allLeads
+                .Select(GetSource)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            ViewBag.Search = search ?? "";
+            ViewBag.Status = status ?? "";
+            ViewBag.Source = source ?? "";
+            ViewBag.Sort = sort ?? "score";
+
+            IEnumerable<Lead> leads = allLeads;
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                leads = leads.Where(l =>
+                    l.CompanyName.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    (l.Description?.Contains(
+                        search,
+                        StringComparison.OrdinalIgnoreCase) ?? false));
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                leads = leads.Where(l => l.Status == status);
+            }
+
+            if (!string.IsNullOrWhiteSpace(source))
+            {
+                leads = leads.Where(l =>
+                    GetSource(l).Equals(
+                        source,
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            leads = sort switch
+            {
+                "newest" => leads
+                    .OrderByDescending(l => l.CreatedAt),
+
+                "oldest" => leads
+                    .OrderBy(l => l.CreatedAt),
+
+                "score_asc" => leads
+                    .OrderBy(l => l.AILeadScore)
+                    .ThenByDescending(l => l.CreatedAt),
+
+                _ => leads
+                    .OrderByDescending(l => l.AILeadScore)
+                    .ThenByDescending(l => l.CreatedAt)
+            };
+
+            return View(leads.ToList());
+        }
+
+        private static string GetSource(Lead lead)
+        {
+            if (string.IsNullOrWhiteSpace(lead.SourceUrl))
+                return "Manual";
+
+            if (Uri.TryCreate(
+                lead.SourceUrl,
+                UriKind.Absolute,
+                out var uri))
+            {
+                return uri.Host
+                    .Replace("www.", "")
+                    .ToLowerInvariant();
+            }
+
+            return "Unknown";
         }
 
         [HttpGet]
@@ -80,7 +164,7 @@ namespace WebLeadAI.Controllers
                 await _discoveryService.DiscoverLeadsAsync();
 
             TempData["Success"] =
-                $"Meklēšana pabeigta. Pievienoti {added} jauni klienti.";
+                $"Meklēšana pabeigta. Pievienoti {added} jauni projekti.";
 
             return RedirectToAction(nameof(Index));
         }
@@ -112,22 +196,19 @@ namespace WebLeadAI.Controllers
             await _context.SaveChangesAsync();
 
             TempData["Success"] =
-                $"Projekta statuss mainīts uz {status}.";
+                "Projekta statuss veiksmīgi atjaunināts.";
 
             return RedirectToAction(
                 nameof(Details),
                 new { id });
         }
-    
-    
-[HttpPost]
+
+        [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RecalculateScores(
-    [FromServices] LeadQualificationService qualification)
+            [FromServices] LeadQualificationService qualification)
         {
             var leads = await _context.Leads.ToListAsync();
-
-            int updated = 0;
 
             foreach (var lead in leads)
             {
@@ -137,25 +218,16 @@ namespace WebLeadAI.Controllers
 
                 lead.AILeadScore = result.Score;
 
-                // Manuāli pieņemtos lēmumus nemainām.
-                if (lead.Status != "Qualified" &&
-                    lead.Status != "Rejected" &&
-                    lead.Status != "Contacted")
-                {
-                    lead.Status = result.IsQualified
-                        ? "NeedsReview"
-                        : "Rejected";
-                }
-
-                updated++;
+                // Pārvērtējam punktus, bet nemainām
+                // iepriekš noteiktos statusus.
             }
 
             await _context.SaveChangesAsync();
 
             TempData["Success"] =
-                $"Pārvērtēti {updated} projekti.";
+                $"Pārvērtēti {leads.Count} projekti. Statusi saglabāti.";
 
             return RedirectToAction(nameof(Index));
         }
-
-    } }
+    }
+}

@@ -1,7 +1,39 @@
-﻿namespace WebLeadAI.Models
+﻿
+using System;
+using System.ComponentModel.DataAnnotations;
+
+namespace WebLeadAI.Models
 {
     public class Lead
     {
+        public int Id { get; set; }
 
+        [Required]
+        [StringLength(200)]
+        public string CompanyName { get; set; } = "";
+
+        [StringLength(200)]
+        public string? Website { get; set; }
+
+        [EmailAddress]
+        [StringLength(254)]
+        public string? Email { get; set; }
+
+        [StringLength(500)]
+        public string? SourceUrl { get; set; }
+
+        [StringLength(100)]
+        public string SourceType { get; set; } = "";
+
+        public string? Description { get; set; }
+
+        public int AILeadScore { get; set; } = 0;
+
+        public string Status { get; set; } = "New";
+
+        public DateTime CreatedAt { get; set; }
+            = DateTime.UtcNow;
+
+        public DateTime? LastContactedAt { get; set; }
     }
 }

@@ -23,49 +23,52 @@ namespace WebLeadAI.Services
 
         public async Task<int> DiscoverLeadsAsync()
         {
-
-           
-
             var items = await _rssService.GetLeadsAsync();
 
             int added = 0;
 
-            
+            var knownUrls = (await _context.Leads
+                .Where(l => l.SourceUrl != null)
+                .Select(l => l.SourceUrl!)
+                .ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var item in items)
             {
                 if (string.IsNullOrWhiteSpace(item.Url))
                     continue;
 
+                if (knownUrls.Contains(item.Url))
+                    continue;
+
                 var result = _qualification.Evaluate(
                     item.Title,
                     item.Description);
 
-                // Saglabājam tikai iespējamos pasūtījumus
                 if (!result.IsQualified)
                     continue;
 
-                bool exists = await _context.Leads
-                    .AnyAsync(l => l.SourceUrl == item.Url);
-
-                if (exists)
-                    continue;
+                string title = item.Title.Length > 200
+                    ? item.Title[..200]
+                    : item.Title;
 
                 var lead = new Lead
                 {
-                    CompanyName = item.Title.Length > 200
-                        ? item.Title[..200]
-                        : item.Title,
-
+                    CompanyName = title,
                     SourceUrl = item.Url,
                     SourceType = "Advertisement",
-                    Description = item.Description,
+                    Description =
+                        $"Avots: {item.Source}\n" +
+                        $"Atlase: {result.Reason}\n\n" +
+                        item.Description,
                     Status = "NeedsReview",
                     AILeadScore = result.Score,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Leads.Add(lead);
+                knownUrls.Add(item.Url);
+
                 added++;
             }
 

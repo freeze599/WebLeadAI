@@ -1,63 +1,77 @@
 ﻿
+using System.Net;
 using System.Text.RegularExpressions;
 
 namespace WebLeadAI.Services
 {
     public class LeadQualificationService
     {
-
         public LeadQualificationResult Evaluate(
             string title,
             string description)
         {
-            string text = Regex.Replace(
-                $"{title} {description}".ToLowerInvariant(),
-                "<[^>]*>", " ");
+            string text = WebUtility.HtmlDecode(
+                $"{title} {description}");
+
+            text = Regex.Replace(
+                text, "<[^>]*>", " ");
+
+            text = text.ToLowerInvariant();
 
             string[] jobIndicators =
             {
-                "full-time",
-                "full time",
+                "full-time employee",
                 "permanent position",
                 "annual salary",
-                "salary range",
                 "employee benefits",
                 "staff engineer",
-                "senior software engineer",
                 "engineering manager",
-                "apply for this job",
                 "we are hiring",
-                "join our team"
+                "join our team",
+                "poste permanent",
+                "offre d'emploi",
+                "вакансія",
+                "повна зайнятість"
             };
 
             string[] projectIndicators =
             {
-                "need a website",
                 "website redesign",
-                "website development project",
-                "looking for a web developer",
-                "website modernization",
+                "website development",
+                "build a website",
+                "create a website",
+                "need a website",
                 "freelance web developer",
-                "contract web developer",
-                "izveidot mājaslapu",
+                "website modernization",
+                "landing page",
+                "e-commerce website",
                 "mājaslapas izstrāde",
-                "meklējam mājaslapas izstrādātāju",
+                "izveidot mājaslapu",
                 "mājaslapas modernizācija",
+                "vajadzīga mājaslapa",
                 "разработка сайта",
                 "создание сайта",
-                "нужен сайт",
-                "редизайн сайта"
+                "редизайн сайта",
+                "création de site",
+                "création d'un site",
+                "refonte de site",
+                "site internet",
+                "site web",
+                "développement web",
+                "створення сайту",
+                "розробка сайту",
+                "редизайн сайту",
+                "вебсайт",
+                "інтернет-магазин"
             };
 
-            bool jobMatch = jobIndicators.Any(
+            bool isJob = jobIndicators.Any(
                 x => text.Contains(x));
 
-            bool projectMatch = projectIndicators.Any(
+            bool isProject = projectIndicators.Any(
                 x => text.Contains(x));
 
-            // Darba vakances pazīmes ir spēcīgs
-            // iemesls neuzskatīt ierakstu par klientu.
-            if (jobMatch)
+            if (isJob)
             {
                 return new LeadQualificationResult
                 {
@@ -67,13 +81,13 @@ namespace WebLeadAI.Services
                 };
             }
 
-            if (projectMatch)
+            if (isProject)
             {
                 return new LeadQualificationResult
                 {
                     IsQualified = true,
                     Score = 70,
-                    Reason = "Iespējams mājaslapas izstrādes pasūtījums"
+                    Reason = "Iespējams mājaslapas pasūtījums"
                 };
             }
 
@@ -81,18 +95,15 @@ namespace WebLeadAI.Services
             {
                 IsQualified = false,
                 Score = 0,
-                Reason = "Nav pietiekamu pasūtījuma pazīmju"
+                Reason = "Nav pietiekamu atbilstības pazīmju"
             };
         }
     }
 
-
     public class LeadQualificationResult
     {
         public bool IsQualified { get; set; }
-
         public int Score { get; set; }
-
         public string Reason { get; set; } = "";
     }
 }

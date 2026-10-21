@@ -8,15 +8,13 @@ namespace WebLeadAI.Models
     {
         public int Id { get; set; }
 
-        [Required]
-        [StringLength(200)]
+        [Required, StringLength(200)]
         public string CompanyName { get; set; } = "";
 
         [StringLength(200)]
         public string? Website { get; set; }
 
-        [EmailAddress]
-        [StringLength(254)]
+        [EmailAddress, StringLength(254)]
         public string? Email { get; set; }
 
         [StringLength(500)]
@@ -31,9 +29,12 @@ namespace WebLeadAI.Models
 
         public string Status { get; set; } = "New";
 
-        public DateTime CreatedAt { get; set; }
-            = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? LastContactedAt { get; set; }
+
+        // Kad sludinājums publicēts sākotnējā avotā.
+        // Null nozīmē, ka datums nav zināms.
+        public DateTime? PublishedAt { get; set; }
     }
 }

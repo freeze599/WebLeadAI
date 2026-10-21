@@ -44,6 +44,9 @@ namespace WebLeadAI.Migrations
                     b.Property<DateTime?>("LastContactedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SourceType")
                         .IsRequired()
                         .HasMaxLength(100)

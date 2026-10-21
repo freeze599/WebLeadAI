@@ -62,11 +62,8 @@ namespace WebLeadAI.Services
 
                     foreach (var item in syndicationFeed.Items)
                     {
-                        string title =
-                            item.Title?.Text ?? "";
-
-                        string description =
-                            item.Summary?.Text ?? "";
+                        string title = item.Title?.Text ?? "";
+                        string description = item.Summary?.Text ?? "";
 
                         string url = item.Links
                             .FirstOrDefault(l =>
@@ -88,17 +85,25 @@ namespace WebLeadAI.Services
                         if (url.Length > 500)
                             continue;
 
+                        DateTime? publishedAt = null;
+
+                        if (item.PublishDate != DateTimeOffset.MinValue)
+                        {
+                            publishedAt = item.PublishDate.UtcDateTime;
+                        }
+
                         results.Add(new RssLeadItem
                         {
                             Title = title,
                             Description = description,
                             Url = url,
-                            Source = feed.Key
+                            Source = feed.Key,
+                            PublishedAt = publishedAt
                         });
                     }
 
                     _logger.LogInformation(
-                        "RSS avots {Source} veiksmīgi nolasīts.",
+                        "RSS avots {Source}: nolasīšana pabeigta.",
                         feed.Key);
                 }
                 catch (Exception ex) when (
@@ -124,5 +129,7 @@ namespace WebLeadAI.Services
         public string Description { get; set; } = "";
         public string Url { get; set; } = "";
         public string Source { get; set; } = "";
+
+        public DateTime? PublishedAt { get; set; }
     }
 }

@@ -27,19 +27,38 @@ namespace WebLeadAI.Services
 
             int added = 0;
 
-            var knownUrls = (await _context.Leads
+            var existingLeads = await _context.Leads
                 .Where(l => l.SourceUrl != null)
-                .Select(l => l.SourceUrl!)
-                .ToListAsync())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToListAsync();
+
+            var knownUrls = existingLeads
+                .GroupBy(
+                    l => l.SourceUrl!,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.First(),
+                    StringComparer.OrdinalIgnoreCase);
 
             foreach (var item in items)
             {
                 if (string.IsNullOrWhiteSpace(item.Url))
                     continue;
 
-                if (knownUrls.Contains(item.Url))
+                if (knownUrls.TryGetValue(
+                    item.Url,
+                    out var existingLead))
+                {
+                    // Papildinām datumu, bet nepārrakstām
+                    // lietotāja noteikto statusu.
+                    if (existingLead.PublishedAt == null &&
+                        item.PublishedAt != null)
+                    {
+                        existingLead.PublishedAt = item.PublishedAt;
+                    }
+
                     continue;
+                }
 
                 var result = _qualification.Evaluate(
                     item.Title,
@@ -63,11 +82,12 @@ namespace WebLeadAI.Services
                         item.Description,
                     Status = "NeedsReview",
                     AILeadScore = result.Score,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    PublishedAt = item.PublishedAt
                 };
 
                 _context.Leads.Add(lead);
-                knownUrls.Add(item.Url);
+                knownUrls[item.Url] = lead;
 
                 added++;
             }

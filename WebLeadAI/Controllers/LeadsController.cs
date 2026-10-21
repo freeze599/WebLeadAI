@@ -5,7 +5,6 @@ using WebLeadAI.Data;
 using WebLeadAI.Models;
 using WebLeadAI.Services;
 
-
 namespace WebLeadAI.Controllers
 {
     public class LeadsController : Controller
@@ -21,10 +20,6 @@ namespace WebLeadAI.Controllers
             _discoveryService = discoveryService;
         }
 
-        // =====================================
-        // 1. KLIENTU SARAKSTS
-        // =====================================
-
         [HttpGet]
         public async Task<IActionResult> Index()
         {
@@ -36,9 +31,18 @@ namespace WebLeadAI.Controllers
             return View(leads);
         }
 
-        // =====================================
-        // 2. JAUNA KLIENTA PIEVIENOŠANAS FORMA
-        // =====================================
+        [HttpGet]
+        public async Task<IActionResult> Details(int id)
+        {
+            var lead = await _context.Leads
+                .AsNoTracking()
+                .FirstOrDefaultAsync(l => l.Id == id);
+
+            if (lead == null)
+                return NotFound();
+
+            return View(lead);
+        }
 
         [HttpGet]
         public IActionResult Create()
@@ -46,28 +50,20 @@ namespace WebLeadAI.Controllers
             return View(new Lead());
         }
 
-        // =====================================
-        // 3. JAUNA KLIENTA SAGLABĀŠANA
-        // =====================================
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(
-            [Bind(
-                "CompanyName,Website,Email,SourceUrl,SourceType,Description"
-            )] Lead lead)
+            [Bind("CompanyName,Website,Email,SourceUrl,SourceType,Description")]
+            Lead lead)
         {
             if (!ModelState.IsValid)
-            {
                 return View(lead);
-            }
 
             lead.Status = "New";
             lead.AILeadScore = 0;
             lead.CreatedAt = DateTime.UtcNow;
 
             _context.Leads.Add(lead);
-
             await _context.SaveChangesAsync();
 
             TempData["Success"] =
@@ -75,10 +71,6 @@ namespace WebLeadAI.Controllers
 
             return RedirectToAction(nameof(Index));
         }
-
-        // =====================================
-        // 4. AUTOMĀTISKĀ KLIENTU MEKLĒŠANA
-        // =====================================
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -88,10 +80,43 @@ namespace WebLeadAI.Controllers
                 await _discoveryService.DiscoverLeadsAsync();
 
             TempData["Success"] =
-                $"Meklēšana pabeigta. " +
-                $"Pievienoti {added} jauni klienti.";
+                $"Meklēšana pabeigta. Pievienoti {added} jauni klienti.";
 
             return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateStatus(
+            int id,
+            string status)
+        {
+            string[] allowedStatuses =
+            {
+                "NeedsReview",
+                "Qualified",
+                "Rejected"
+            };
+
+            if (!allowedStatuses.Contains(status))
+                return BadRequest("Nederīgs statuss.");
+
+            var lead = await _context.Leads
+                .FirstOrDefaultAsync(l => l.Id == id);
+
+            if (lead == null)
+                return NotFound();
+
+            lead.Status = status;
+
+            await _context.SaveChangesAsync();
+
+            TempData["Success"] =
+                $"Projekta statuss mainīts uz {status}.";
+
+            return RedirectToAction(
+                nameof(Details),
+                new { id });
         }
     }
 }

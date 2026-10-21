@@ -1,0 +1,177 @@
+﻿@model WebLeadAI.Models.Lead
+
+@{
+    ViewData["Title"] = "Projekta detaļas";
+
+    string statusColor = Model.Status switch
+    {
+        "Qualified" => "success",
+        "Rejected" => "danger",
+        "NeedsReview" => "warning",
+        _ => "secondary"
+    };
+
+    bool validSource = Uri.TryCreate(
+        Model.SourceUrl,
+        UriKind.Absolute,
+        out var sourceUri)
+        && (sourceUri.Scheme == Uri.UriSchemeHttps
+            || sourceUri.Scheme == Uri.UriSchemeHttp);
+}
+
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between
+        align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold">Projekta detaļas</h2>
+            <p class="text-muted mb-0">
+                WebLeadAI — klienta izvērtēšana
+            </p>
+        </div>
+
+        <a asp-action="Index"
+           class="btn btn-outline-secondary">
+            ← Atpakaļ
+        </a>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success">
+            @TempData["Success"]
+        </div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body p-4">
+
+            <h3 class="mb-3">
+                @Model.CompanyName
+            </h3>
+
+            <div class="mb-3">
+                <span class="badge bg-@statusColor">
+                    @Model.Status
+                </span>
+
+                <span class="badge bg-secondary ms-2">
+                    Vērtējums: @Model.AILeadScore / 100
+                </span>
+            </div>
+
+            <hr />
+
+            <h5>Projekta apraksts</h5>
+
+            <div class="border rounded p-3 bg-light mb-4"
+                 style="white-space:pre-wrap;
+                overflow-wrap:anywhere;">
+                @Model.Description
+            </div>
+
+            <h5>Informācija</h5>
+
+            <dl class="row mt-3">
+                <dt class="col-sm-3">Avota tips</dt>
+                <dd class="col-sm-9">
+                    @Model.SourceType
+                </dd>
+
+                <dt class="col-sm-3">Mājaslapa</dt>
+                <dd class="col-sm-9">
+                    @(Model.Website ?? "Nav norādīta")
+                </dd>
+
+                <dt class="col-sm-3">E-pasts</dt>
+                <dd class="col-sm-9">
+                    @(Model.Email ?? "Nav norādīts")
+                </dd>
+
+                <dt class="col-sm-3">Pievienots</dt>
+                <dd class="col-sm-9">
+                    @Model.CreatedAt.ToLocalTime()
+                    .ToString("dd.MM.yyyy HH:mm")
+                </dd>
+            </dl>
+
+            @if (validSource)
+            {
+                <a href="@Model.SourceUrl"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="btn btn-outline-primary mt-2">
+                    Atvērt oriģinālo sludinājumu ↗
+                </a>
+            }
+
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+
+            <h5 class="mb-3">Projekta izvērtēšana</h5>
+
+            <div class="d-flex gap-2 flex-wrap">
+
+                <form asp-action="UpdateStatus"
+                      method="post">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="id"
+                           value="@Model.Id" />
+
+                    <input type="hidden"
+                           name="status"
+                           value="Qualified" />
+
+                    <button type="submit"
+                            class="btn btn-success">
+                        ✓ Apstiprināt
+                    </button>
+                </form>
+
+                <form asp-action="UpdateStatus"
+                      method="post">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="id"
+                           value="@Model.Id" />
+
+                    <input type="hidden"
+                           name="status"
+                           value="Rejected" />
+
+                    <button type="submit"
+                            class="btn btn-danger">
+                        ✕ Noraidīt
+                    </button>
+                </form>
+
+                <form asp-action="UpdateStatus"
+                      method="post">
+                    @Html.AntiForgeryToken()
+
+                    <input type="hidden"
+                           name="id"
+                           value="@Model.Id" />
+
+                    <input type="hidden"
+                           name="status"
+                           value="NeedsReview" />
+
+                    <button type="submit"
+                            class="btn btn-outline-secondary">
+                        ↺ Atgriezt pārskatīšanā
+                    </button>
+                </form>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>

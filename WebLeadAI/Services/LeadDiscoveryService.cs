@@ -27,7 +27,8 @@ namespace WebLeadAI.Services
             return report.Sum(x => x.Added);
         }
 
-        public async Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync()
+        public async Task<List<LeadSourceStatistics>>
+            DiscoverWithStatisticsAsync()
         {
             var feeds = await _rssService.GetFeedResultsAsync();
             var report = new List<LeadSourceStatistics>();
@@ -53,61 +54,65 @@ namespace WebLeadAI.Services
                     Read = feed.Items.Count,
                     Error = feed.Error
                 };
+
                 report.Add(stats);
 
                 foreach (var item in feed.Items)
                 {
-                if (string.IsNullOrWhiteSpace(item.Url))
-                    continue;
+                    if (string.IsNullOrWhiteSpace(item.Url))
+                        continue;
 
-                var evaluation = _qualification.Evaluate(item.Title, item.Description);
-                if (evaluation.IsQualified) stats.Qualified++;
-
-                if (knownUrls.TryGetValue(
-                    item.Url,
-                    out var existingLead))
-                {
-                    stats.Duplicates++;
-                    // Papildinām datumu, bet nepārrakstām
-                    // lietotāja noteikto statusu.
-                    if (existingLead.PublishedAt == null &&
-                        item.PublishedAt != null)
+                    if (knownUrls.TryGetValue(
+                        item.Url,
+                        out var existingLead))
                     {
-                        existingLead.PublishedAt = item.PublishedAt;
+                        stats.Duplicates++;
+
+                        if (existingLead.PublishedAt == null &&
+                            item.PublishedAt != null)
+                        {
+                            existingLead.PublishedAt =
+                                item.PublishedAt;
+                        }
+
+                        continue;
                     }
 
-                    continue;
-                }
+                    var evaluation = _qualification.Evaluate(
+                        item.Title,
+                        item.Description);
 
-                if (!evaluation.IsQualified)
-                {
-                    stats.Rejected++;
-                    continue;
-                }
+                    if (!evaluation.IsQualified)
+                    {
+                        stats.Rejected++;
+                        continue;
+                    }
 
-                string title = item.Title.Length > 200
-                    ? item.Title[..200]
-                    : item.Title;
+                    stats.Qualified++;
 
-                var lead = new Lead
-                {
-                    CompanyName = title,
-                    SourceUrl = item.Url,
-                    SourceType = "Advertisement",
-                    Description =
-                        $"Avots: {item.Source}\n" +
-                        $"Atlase: {evaluation.Reason}\n\n" +
-                        item.Description,
-                    Status = "NeedsReview",
-                    AILeadScore = evaluation.Score,
-                    CreatedAt = DateTime.UtcNow,
-                    PublishedAt = item.PublishedAt
-                };
+                    string title = item.Title.Length > 200
+                        ? item.Title[..200]
+                        : item.Title;
 
-                _context.Leads.Add(lead);
-                knownUrls[item.Url] = lead;
+                    var lead = new Lead
+                    {
+                        CompanyName = title,
+                        SourceUrl = item.Url,
+                        SourceType = "Advertisement",
 
-                stats.Added++;
+                        // Saglabājam tikai oriģinālo aprakstu.
+                        Description = item.Description,
+
+                        Status = "NeedsReview",
+                        AILeadScore = evaluation.Score,
+                        CreatedAt = DateTime.UtcNow,
+                        PublishedAt = item.PublishedAt
+                    };
+
+                    _context.Leads.Add(lead);
+                    knownUrls[item.Url] = lead;
+
+                    stats.Added++;
                 }
             }
 
@@ -116,10 +121,7 @@ namespace WebLeadAI.Services
             return report;
         }
     }
-}
 
-namespace WebLeadAI.Services
-{
     public class LeadSourceStatistics
     {
         public string Source { get; set; } = "";

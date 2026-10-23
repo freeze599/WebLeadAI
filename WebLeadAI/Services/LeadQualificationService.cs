@@ -218,266 +218,232 @@ namespace WebLeadAI.Services
             };
         }
 
-        // JAUNAIS ALGORITMS 2.0
-        // Pagaidām izmantojams tikai testiem un auditam.
-        public LeadQualificationResult EvaluateV2(
-            string title,
-            string description)
+        // ALGORITMS 2.2 — audits; 1.0 Evaluate() netiek mainīts.
+        // IsQualified = ticams klienta pasūtījums, nevis prasmju garantija.
+        public LeadQualificationResult EvaluateV2(string title, string description)
         {
-            string text = Normalize($"{title} {description}");
             string heading = Normalize(title);
-
+            string text = Normalize($"{title} {description}");
             var orderReasons = new List<string>();
             var skillReasons = new List<string>();
 
+            // Vispirms pārbaudām sludinājuma veidu, nevis tehnoloģijas.
             string[] jobWords =
             {
-                "we are hiring", "full-time employee",
-                "permanent position", "employee benefits",
-                "annual salary", "join our team",
-                "offre d'emploi", "recrutement cdi",
-                "вакансія", "повна зайнятість"
+                "we are hiring", "we're hiring", "now hiring", "join our team",
+                "full-time employee", "full time employee", "full-time position",
+                "permanent position", "employee benefits", "annual salary",
+                "job opening", "job vacancy", "employment contract",
+                "apply for this position", "apply for the role", "career opportunity",
+                "offre d'emploi", "recrutement cdi", "poste à pourvoir",
+                "rejoignez notre équipe", "вакансія", "повна зайнятість",
+                "постоянная работа в офисе", "вакансия", "полная занятость"
             };
-
             string[] offerWords =
             {
-                "i offer website development",
-                "i provide web development services",
-                "hire me for web development",
-                "je propose mes services",
-                "j'offre mes services",
-                "предлагаю услуги разработки",
+                "i offer website development", "i provide web development services",
+                "hire me for web development", "my web development services",
+                "je propose mes services", "j'offre mes services",
+                "je suis développeur freelance", "предлагаю услуги разработки",
                 "надаю послуги розробки"
             };
 
-            bool isJob = HasAny(text, jobWords);
-            bool isOffer = HasAny(text, offerWords);
+            bool jobTitle = Regex.IsMatch(heading,
+                @"\b(senior|junior|mid-level|middle|lead|staff|principal)\b.{0,65}\b(developer|engineer|programmer)\b")
+                || Regex.IsMatch(heading,
+                @"\b(full[- ]?stack|front[- ]?end|back[- ]?end)\s+(developer|engineer)\b")
+                || Regex.IsMatch(heading,
+                @"\b(developer|engineer)\s+(position|vacancy|job|role)\b")
+                || Regex.IsMatch(heading,
+                @"\b(développeur|разработчик|розробник)\b.{0,40}\b(senior|junior|cdi|вакансия|вакансія)\b");
 
-            if (isJob || isOffer)
-            {
-                string reason = isJob
-                    ? "Darba vakances pazīmes"
-                    : "Pakalpojumu piedāvājuma pazīmes";
-
-                return new LeadQualificationResult
-                {
-                    Score = 0,
-                    IsQualified = false,
-                    Reason = reason,
-                    OrderConfidence = 0,
-                    SkillMatch = 0,
-                    OrderReason = reason,
-                    SkillReason = "Nav vērtēts"
-                };
-            }
+            if (HasAny(text, jobWords) || jobTitle)
+                return RejectV2("Darba vakances pazīmes");
+            if (HasAny(text, offerWords))
+                return RejectV2("Pakalpojumu piedāvājuma pazīmes");
 
             string[] websiteWords =
             {
-                "website", "web site", "web app",
-                "landing page", "e-commerce", "ecommerce",
-                "online store", "shopify", "wordpress",
-                "woocommerce", "prestashop",
-                "site web", "site internet",
-                "site vitrine", "boutique",
-                "mājaslap", "tīmekļa vietn",
-                "сайт", "сайту", "сайта",
-                "вебсайт", "магазин",
-                "інтернет-магазин"
+                "website", "web site", "web app", "landing page", "e-commerce",
+                "ecommerce", "online store", "online shop", "shopify", "wordpress",
+                "woocommerce", "prestashop", "joomla", "cms", "site web",
+                "site internet", "site vitrine", "boutique", "mājaslap",
+                "tīmekļa vietn", "сайт", "сайту", "сайта", "вебсайт",
+                "магазин", "інтернет-магазин", "интернет-магазин"
             };
-
             string[] requestWords =
             {
-                "i need", "we need", "looking for",
-                "looking to hire", "i want to",
-                "we want to", "seeking",
-                "je cherche", "recherche expert",
-                "recherche développeur",
-                "recherche developpeur",
-                "j'ai besoin", "nous avons besoin",
-                "je souhaiterais", "nous souhaitons",
-                "je voudrais", "besoin de",
-                "meklēju", "nepieciešams",
-                "ищу", "нужен", "нужно",
-                "шукаємо", "шукаю",
-                "потрібен", "потрібно"
+                "i need", "we need", "i want", "we want", "i have an",
+                "looking for", "looking to hire", "seeking", "je cherche",
+                "recherche expert", "recherche développeur", "recherche developpeur",
+                "j'ai besoin", "nous avons besoin", "je souhaiterais",
+                "nous souhaitons", "je voudrais", "nous voudrions", "besoin de",
+                "meklēju", "nepieciešams", "vēlos", "ищу", "нужен",
+                "нужно", "хочу", "шукаємо", "шукаю", "потрібен", "потрібно"
             };
-
             string[] buildWords =
             {
-                "create a website", "build a website",
-                "website development", "website creation",
-                "develop a website", "new website",
-                "création de site", "création d'un site",
-                "créer un site", "creer un site",
-                "développement de site",
-                "mājaslapas izstrāde",
-                "izveidot mājaslapu",
-                "создание сайта", "разработка сайта",
+                "create a website", "build a website", "website development",
+                "website creation", "develop a website", "new website",
+                "création de site", "création d'un site", "créer un site",
+                "creer un site", "développement de site", "mājaslapas izstrāde",
+                "izveidot mājaslapu", "создание сайта", "разработка сайта",
                 "створення сайту", "розробка сайту"
             };
-
             string[] changeWords =
             {
-                "redesign", "rebuild", "modernize",
-                "website update", "website changes",
-                "website fixes", "fix website",
-                "bug fixes", "maintenance",
-                "refonte", "modifs", "modifications",
-                "correction d'erreurs",
-                "correction de bugs", "correction de bug",
-                "mise à jour", "maintenance du site",
-                "modernisation", "mājaslapas pārveide",
-                "labot mājaslapu", "atjaunot mājaslapu",
-                "редизайн", "обновление",
-                "исправление ошибок",
-                "оновлення", "підтримки",
-                "підтримка", "виправлення помилок"
+                "redesign", "rebuild", "modernize", "website update",
+                "website changes", "website fixes", "fix website", "bug fixes",
+                "maintenance", "refonte", "modifs", "modifications",
+                "correction d'erreurs", "correction de bugs", "correction de bug",
+                "mise à jour", "maintenance du site", "modernisation",
+                "mājaslapas pārveide", "labot mājaslapu", "atjaunot mājaslapu",
+                "редизайн", "обновление", "исправление ошибок",
+                "оновлення", "підтримки", "підтримка", "виправлення помилок"
+            };
+            string[] migrationWords =
+            {
+                "migration", "migrer", "migrate", "migrating", "upgrade",
+                "version upgrade", "pārcelt vietni", "migrācija", "миграция",
+                "перенос сайта", "міграція", "перенесення сайту"
+            };
+            string[] catalogWords =
+            {
+                "import excel", "import products", "product import", "import inventory",
+                "upload products", "publish products", "items published",
+                "published in our online store", "product listings", "catalog import",
+                "catalogue import", "importer des produits", "importation produits",
+                "preču imports", "importēt preces", "импорт товаров", "загрузка товаров",
+                "імпорт товарів", "завантаження товарів"
             };
 
             bool hasWebsite = HasAny(text, websiteWords);
             bool hasRequest = HasAny(text, requestWords);
             bool hasBuild = HasAny(text, buildWords);
             bool hasChanges = HasAny(text, changeWords);
+            bool hasMigration = HasAny(text, migrationWords);
+            bool hasCatalog = HasAny(text, catalogWords);
+            bool concreteTask = hasBuild || hasChanges || hasMigration || hasCatalog;
 
-            int confidence = 0;
+            // Izņēmums: īss, bet nepārprotams uzdevums virsrakstā.
+            // Viena tehnoloģijas nosaukuma vai "looking for" nepietiek.
+            bool taskInTitle = HasAny(heading, buildWords) ||
+                               HasAny(heading, changeWords) ||
+                               HasAny(heading, migrationWords) ||
+                               HasAny(heading, catalogWords);
 
-            if (hasWebsite)
-            {
-                confidence += 20;
-                orderReasons.Add("Mājaslapas vai e-komercijas tēma");
-            }
+            if (!hasWebsite || !concreteTask)
+                return RejectV2("Nav pietiekami konkrēta mājaslapas vai e-komercijas uzdevuma");
+
+            int confidence = 20;
+            orderReasons.Add("Mājaslapas vai e-komercijas tēma");
 
             if (hasRequest)
             {
-                confidence += 40;
+                confidence += 30;
                 orderReasons.Add("Klienta pieprasījuma formulējums");
             }
-
             if (hasBuild)
             {
                 confidence += 30;
                 orderReasons.Add("Vietnes izstrādes uzdevums");
             }
-
             if (hasChanges)
             {
                 confidence += 30;
-                orderReasons.Add("Pārveides, labošanas vai uzturēšanas uzdevums");
+                orderReasons.Add("Vietnes labošanas vai pārveides uzdevums");
             }
-
-            if (hasWebsite &&
-                (HasAny(heading, buildWords) ||
-                 HasAny(heading, changeWords)))
+            if (hasMigration)
             {
-                confidence += 10;
+                confidence += 35;
+                orderReasons.Add("Vietnes migrācijas uzdevums");
+            }
+            if (hasCatalog)
+            {
+                confidence += 35;
+                orderReasons.Add("Preču kataloga ievades vai importa uzdevums");
+            }
+            if (taskInTitle)
+            {
+                confidence += 15;
                 orderReasons.Add("Konkrēts uzdevums virsrakstā");
             }
-
-            // Ja nav nevienas pieprasījuma vai darba pazīmes,
-            // tehnoloģiju pieminēšana viena pati nav pietiekama.
-            if (!hasRequest && !hasBuild && !hasChanges)
-                confidence = Math.Min(confidence, 20);
-
             confidence = Math.Clamp(confidence, 0, 100);
 
-            int skill = 0;
-
-            if (hasWebsite)
-            {
-                skill += 20;
-                skillReasons.Add("Mājaslapu izstrādes joma");
-            }
-
+            int skill = 20;
+            skillReasons.Add("Mājaslapu vai e-komercijas joma");
             if (hasBuild)
             {
                 skill += 20;
                 skillReasons.Add("Jaunas vietnes izstrāde");
             }
-
             if (hasChanges)
             {
                 skill += 15;
                 skillReasons.Add("Esošas vietnes uzlabošana");
             }
-
-            if (HasAny(text, new[]
+            if (hasMigration)
             {
-                "asp.net", ".net core", "blazor", "c#",
-                "asp net"
-            }))
+                skill += 10;
+                skillReasons.Add("Vietnes migrācija — jāpārbauda platforma");
+            }
+            if (hasCatalog)
+            {
+                skill += 5;
+                skillReasons.Add("Preču datu imports — iespējams datu ievades darbs");
+            }
+            if (HasAny(text, new[] { "asp.net", ".net core", "blazor", "c#", "asp net" }))
             {
                 skill += 40;
                 skillReasons.Add("C# / ASP.NET tehnoloģijas");
             }
-
-            if (HasAny(text, new[]
-            {
-                "linux", "nginx", "vps",
-                "server deployment", "hosting setup"
-            }))
+            if (HasAny(text, new[] { "linux", "nginx", "vps", "server deployment", "hosting setup" }))
             {
                 skill += 20;
                 skillReasons.Add("Linux / serveru uzstādīšana");
             }
-
-            if (HasAny(text, new[]
-            {
-                "landing page", "site vitrine",
-                "portfolio website", "site portfolio"
-            }))
+            if (HasAny(text, new[] { "landing page", "site vitrine", "portfolio website", "site portfolio" }))
             {
                 skill += 20;
                 skillReasons.Add("Landing page vai portfolio");
             }
-
-            bool hasCms = HasAny(text, new[]
+            if (HasAny(text, new[] { "wordpress", "woocommerce", "shopify", "prestashop", "joomla" }))
             {
-                "wordpress", "woocommerce",
-                "shopify", "prestashop"
-            });
-
-            if (hasCms)
-            {
-                skillReasons.Add(
-                    "CMS platforma — nepieciešama manuāla prasmju pārbaude");
-
-                // Specifiskas CMS prasības neuzskatām
-                // par automātisku ASP.NET priekšrocību.
                 skill = Math.Min(skill, 45);
+                skillReasons.Add("CMS platforma — nepieciešama manuāla prasmju pārbaude");
             }
-
             skill = Math.Clamp(skill, 0, 100);
 
-            bool isQualified =
-                hasWebsite &&
-                confidence >= 50;
-
-            // Savietojamības lauki jaunajā režīmā.
-            // Score ir prioritātes rādītājs, nevis
-            // matemātiska pasūtījuma varbūtība.
-            int priority = isQualified
-                ? (int)Math.Round(
-                    confidence * 0.65 + skill * 0.35)
+            // Pasūtījuma ticamība un prasmju atbilstība ir atšķirīgi rādītāji.
+            bool qualified = confidence >= 50;
+            int priority = qualified
+                ? (int)Math.Round(confidence * 0.65 + skill * 0.35)
                 : 0;
-
-            string orderReason = orderReasons.Count > 0
-                ? string.Join("; ", orderReasons)
-                : "Nav skaidru pasūtījuma pazīmju";
-
-            string skillReason = skillReasons.Count > 0
-                ? string.Join("; ", skillReasons)
-                : "Nav noteikta prasmju atbilstība";
-
+            string orderReason = string.Join("; ", orderReasons);
+            string skillReason = string.Join("; ", skillReasons);
             return new LeadQualificationResult
             {
-                IsQualified = isQualified,
+                IsQualified = qualified,
                 Score = priority,
-                Reason = $"Pasūtījums: {orderReason}. " +
-                         $"Prasmes: {skillReason}.",
+                Reason = $"Pasūtījums: {orderReason}. Prasmes: {skillReason}.",
                 OrderConfidence = confidence,
                 SkillMatch = skill,
                 OrderReason = orderReason,
                 SkillReason = skillReason
+            };
+        }
+
+        private static LeadQualificationResult RejectV2(string reason)
+        {
+            return new LeadQualificationResult
+            {
+                IsQualified = false,
+                Score = 0,
+                Reason = reason,
+                OrderConfidence = 0,
+                SkillMatch = 0,
+                OrderReason = reason,
+                SkillReason = "Nav vērtēts"
             };
         }
 

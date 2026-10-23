@@ -31,8 +31,38 @@ builder.Services.AddHttpClient<
 builder.Services.AddScoped<
     WebLeadAI.Services.LeadQualificationService>();
 
+builder.Services.AddScoped<
+    WebLeadAI.Services.LeadDescriptionCleanupService>();
+
 
 var app = builder.Build();
+if (args.Contains("--cleanup-descriptions-preview") ||
+    args.Contains("--cleanup-descriptions-apply"))
+{
+    bool apply = args.Contains("--cleanup-descriptions-apply");
+
+    using var scope = app.Services.CreateScope();
+
+    var cleanup = scope.ServiceProvider
+        .GetRequiredService<
+            WebLeadAI.Services.LeadDescriptionCleanupService>();
+
+    var result = await cleanup.CleanAsync(apply);
+
+    Console.WriteLine("WebLeadAI aprakstu tīrīšana");
+    Console.WriteLine($"Kopā: {result.Total}");
+    Console.WriteLine($"Atpazīti: {result.Matched}");
+    Console.WriteLine($"Iztīrīti: {result.Cleaned}");
+    Console.WriteLine($"Izlaisti (tukšs oriģināls): {result.Skipped}");
+    Console.WriteLine(
+        apply
+            ? "Izmaiņas saglabātas."
+            : "Priekšskatījums — datubāze nav mainīta.");
+
+    return;
+}
+
+
 
 if (!app.Environment.IsDevelopment())
 {
@@ -53,3 +83,5 @@ app.MapControllerRoute(
     .WithStaticAssets();
 
 app.Run();
+
+

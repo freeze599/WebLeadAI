@@ -1,4 +1,6 @@
-﻿@model List<WebLeadAI.Models.LeadAuditItem>
+﻿
+@model List<WebLeadAI.Models.LeadAuditItem>
+@using System.Net
 
 @{
     ViewData["Title"] = "Projektu audits";
@@ -7,85 +9,226 @@
     int qualified = Model.Count(x => x.IsQualified);
     int rejected = total - qualified;
     int changed = Model.Count(x => x.OldScore != x.NewScore);
+
+    int qualifiedV2 = Model.Count(x => x.IsQualifiedV2);
+    int recovered = Model.Count(x =>
+        !x.IsQualified && x.IsQualifiedV2);
 }
 
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between
-        align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold">Projektu vērtēšanas audits</h2>
-            <p class="text-muted">
-                Vecā un jaunā algoritma salīdzinājums.
+            <p class="text-muted mb-0">
+                Algoritmu 1.0 un 2.0 salīdzinājums.
                 Datubāze netiek mainīta.
             </p>
         </div>
 
-        <a asp-action="Index"
+        <a asp-controller="Leads"
+           asp-action="Index"
            class="btn btn-outline-secondary">
             ← Atpakaļ
         </a>
     </div>
 
+    <!-- KOPSAVILKUMS -->
+
     <div class="row g-3 mb-4">
+
         <div class="col-md-3">
-            <div class="card bg-light border-0">
+            <div class="card bg-light border-0 h-100">
                 <div class="card-body">
                     <div class="text-muted">Visi projekti</div>
-                    <h3>@total</h3>
+                    <h3 class="mb-0">@total</h3>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card bg-light border-0">
+            <div class="card bg-light border-0 h-100">
                 <div class="card-body">
-                    <div class="text-muted">Atbilstoši</div>
-                    <h3 class="text-success">@qualified</h3>
+                    <div class="text-muted">Atbilstoši 1.0</div>
+                    <h3 class="text-success mb-0">@qualified</h3>
+                    <small class="text-muted">
+                        Neatbilstoši: @rejected
+                    </small>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card bg-light border-0">
+            <div class="card bg-light border-0 h-100">
                 <div class="card-body">
-                    <div class="text-muted">Neatbilstoši</div>
-                    <h3 class="text-danger">@rejected</h3>
+                    <div class="text-muted">Atbilstoši 2.0</div>
+                    <h3 class="text-primary mb-0">@qualifiedV2</h3>
+                    <small class="text-muted">
+                        Jaunā algoritma rezultāts
+                    </small>
                 </div>
             </div>
         </div>
 
         <div class="col-md-3">
-            <div class="card bg-light border-0">
+            <div class="card bg-light border-0 h-100">
                 <div class="card-body">
-                    <div class="text-muted">Mainījies vērtējums</div>
-                    <h3>@changed</h3>
+                    <div class="text-muted">2.0 atgūtie projekti</div>
+                    <h3 class="text-info mb-0">@recovered</h3>
+                    <small class="text-muted">
+                        Noraidīti 1.0, pieņemti 2.0
+                    </small>
                 </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="alert alert-light border mb-4">
+        <strong>Vērtējumu skaidrojums:</strong>
+        Pasūtījuma ticamība novērtē, vai sludinājumā
+        ir klienta pieprasījuma pazīmes.
+        Prasmju atbilstība novērtē projekta saistību
+        ar tavām tehnoloģijām.
+        Abi ir algoritmiski rādītāji, nevis
+        statistiski pierādītas varbūtības.
+        <div class="small text-muted mt-1">
+            Mainījies 1.0 vērtējums: @changed projekti.
+            Esošie ieraksti un statusi netiek mainīti.
+        </div>
+    </div>
+
+    <!-- FILTRI -->
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="mb-3">Audita filtrēšana</h5>
+
+            <div class="row g-3 align-items-end">
+
+                <div class="col-md-4">
+                    <label for="auditSearch" class="form-label">
+                        Meklēt projektu
+                    </label>
+
+                    <input id="auditSearch"
+                           type="text"
+                           class="form-control"
+                           placeholder="Nosaukums vai pamatojums..." />
+                </div>
+
+                <div class="col-md-3">
+                    <label for="auditStatus" class="form-label">
+                        Atbilstība
+                    </label>
+
+                    <select id="auditStatus" class="form-select">
+                        <option value="all">Visi projekti</option>
+                        <option value="rejected">
+                            Neatbilstoši 1.0
+                        </option>
+                        <option value="qualified">
+                            Atbilstoši 1.0
+                        </option>
+                        <option value="v2rejected">
+                            Neatbilstoši 2.0
+                        </option>
+                        <option value="v2qualified">
+                            Atbilstoši 2.0
+                        </option>
+                        <option value="recovered">
+                            Atgūti ar 2.0
+                        </option>
+                        <option value="lost">
+                            Pieņemti 1.0, noraidīti 2.0
+                        </option>
+                        <option value="changed">
+                            Mainījies 1.0 vērtējums
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="auditSort" class="form-label">
+                        Kārtošana
+                    </label>
+
+                    <select id="auditSort" class="form-select">
+                        <option value="drop">
+                            Lielākais 1.0 vērtējuma kritums
+                        </option>
+                        <option value="increase">
+                            Lielākais 1.0 pieaugums
+                        </option>
+                        <option value="confidence">
+                            Augstākā pasūtījuma ticamība
+                        </option>
+                        <option value="skill">
+                            Augstākā prasmju atbilstība
+                        </option>
+                        <option value="priority">
+                            Augstākā 2.0 prioritāte
+                        </option>
+                        <option value="new_desc">
+                            Augstākais 1.0 jaunais vērtējums
+                        </option>
+                        <option value="new_asc">
+                            Zemākais 1.0 jaunais vērtējums
+                        </option>
+                        <option value="old_desc">
+                            Augstākais datubāzes vērtējums
+                        </option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <button id="resetAudit"
+                            type="button"
+                            class="btn btn-outline-secondary w-100">
+                        Notīrīt
+                    </button>
+                </div>
+
             </div>
         </div>
     </div>
 
+    <!-- PROJEKTU TABULA -->
+
     <div class="card shadow-sm">
-        <div class="card-header bg-white">
+
+        <div class="card-header bg-white py-3
+                    d-flex justify-content-between align-items-center">
+
             <h5 class="mb-0">Projektu salīdzinājums</h5>
+
+            <span class="text-muted">
+                Redzami:
+                <strong id="visibleCount">@total</strong>
+            </span>
         </div>
 
         <div class="table-responsive">
-            <table class="table table-striped
-                table-hover align-middle mb-0">
+            <table class="table table-striped table-hover
+                          align-middle mb-0">
+
                 <thead class="table-light">
                     <tr>
                         <th>Projekts</th>
-                        <th>Vecais</th>
-                        <th>Jaunais</th>
+                        <th>Datubāzē</th>
+                        <th>1.0</th>
                         <th>Izmaiņa</th>
-                        <th>Atbilstība</th>
+                        <th>Pasūtījums</th>
+                        <th>Prasmes</th>
+                        <th>2.0 prioritāte</th>
+                        <th>1.0 / 2.0</th>
                         <th>Statuss</th>
                         <th>Darbība</th>
                     </tr>
                 </thead>
 
-                <tbody>
+                <tbody id="auditTableBody">
+
                     @foreach (var item in Model)
                     {
                         string difference =
@@ -98,41 +241,103 @@
                             item.Difference < 0 ? "danger" :
                             "secondary";
 
-                        <tr>
-                            <td style="max-width:350px;
-                                overflow-wrap:anywhere;">
-                                <strong>@item.Title</strong>
+                        <tr class="audit-row"
+                            data-qualified="@(item.IsQualified ? "true" : "false")"
+                            data-qualified-v2="@(item.IsQualifiedV2 ? "true" : "false")"
+                            data-old="@item.OldScore"
+                            data-new="@item.NewScore"
+                            data-difference="@item.Difference"
+                            data-confidence="@item.OrderConfidence"
+                            data-skill="@item.SkillMatch"
+                            data-priority="@item.PriorityScore">
+
+                            <td style="min-width:280px;
+                                       max-width:380px;
+                                       overflow-wrap:anywhere;">
+
+                                <strong>
+                                    @WebUtility.HtmlDecode(item.Title)
+                                </strong>
+
                                 <div class="small text-muted mt-1">
+                                    <strong>1.0:</strong>
                                     @item.Reason
+                                </div>
+
+                                <div class="small text-muted mt-1">
+                                    <strong>2.0 pasūtījums:</strong>
+                                    @item.OrderReason
+                                </div>
+
+                                <div class="small text-muted mt-1">
+                                    <strong>2.0 prasmes:</strong>
+                                    @item.SkillReason
                                 </div>
                             </td>
 
                             <td>@item.OldScore</td>
+
                             <td>
                                 <strong>@item.NewScore</strong>
                             </td>
+
                             <td>
                                 <span class="text-@diffColor">
                                     @difference
                                 </span>
                             </td>
+
                             <td>
+                                <span class="badge bg-info text-dark">
+                                    @item.OrderConfidence / 100
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-primary">
+                                    @item.SkillMatch / 100
+                                </span>
+                            </td>
+
+                            <td>
+                                <strong>@item.PriorityScore</strong>
+                            </td>
+
+                            <td style="min-width:130px;">
                                 @if (item.IsQualified)
                                 {
-                                    <span class="badge bg-success">
-                                        Atbilstošs
+                                    <span class="badge bg-success mb-1">
+                                        1.0: Jā
                                     </span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-danger">
-                                        Neatbilstošs
+                                    <span class="badge bg-danger mb-1">
+                                        1.0: Nē
                                     </span>
                                 }
+
+                                <div>
+                                    @if (item.IsQualifiedV2)
+                                    {
+                                        <span class="badge bg-success">
+                                            2.0: Jā
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            2.0: Nē
+                                        </span>
+                                    }
+                                </div>
                             </td>
+
                             <td>@item.CurrentStatus</td>
+
                             <td>
-                                <a asp-action="Details"
+                                <a asp-controller="Leads"
+                                   asp-action="Details"
                                    asp-route-id="@item.LeadId"
                                    class="btn btn-sm btn-outline-primary">
                                     Apskatīt
@@ -141,17 +346,160 @@
                         </tr>
                     }
 
-                    @if (!Model.Any())
-                    {
-                        <tr>
-                            <td colspan="7"
-                                class="text-center py-4">
-                                Nav projektu auditēšanai.
-                            </td>
-                        </tr>
-                    }
                 </tbody>
             </table>
         </div>
+
+        <div id="auditEmpty"
+             class="text-center text-muted py-4"
+             style="display:none;">
+            Nav projektu, kas atbilst izvēlētajiem filtriem.
+        </div>
+
     </div>
 </div>
+
+@section Scripts {
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+
+        const searchInput = document.getElementById("auditSearch");
+        const statusSelect = document.getElementById("auditStatus");
+        const sortSelect = document.getElementById("auditSort");
+        const resetButton = document.getElementById("resetAudit");
+        const tableBody = document.getElementById("auditTableBody");
+        const visibleCount = document.getElementById("visibleCount");
+        const emptyMessage = document.getElementById("auditEmpty");
+
+        const rows = Array.from(
+            tableBody.querySelectorAll(".audit-row")
+        );
+
+        function applyFilters() {
+
+            const search = searchInput.value
+                .trim()
+                .toLocaleLowerCase();
+
+            const status = statusSelect.value;
+            const sort = sortSelect.value;
+
+            const filtered = rows.filter(row => {
+
+                const text = row.textContent.toLocaleLowerCase();
+
+                const qualified =
+                    row.dataset.qualified === "true";
+
+                const qualifiedV2 =
+                    row.dataset.qualifiedV2 === "true";
+
+                const oldScore = Number(row.dataset.old);
+                const newScore = Number(row.dataset.new);
+
+                const matchesSearch =
+                    search === "" || text.includes(search);
+
+                let matchesStatus = true;
+
+                switch (status) {
+                    case "rejected":
+                        matchesStatus = !qualified;
+                        break;
+
+                    case "qualified":
+                        matchesStatus = qualified;
+                        break;
+
+                    case "v2rejected":
+                        matchesStatus = !qualifiedV2;
+                        break;
+
+                    case "v2qualified":
+                        matchesStatus = qualifiedV2;
+                        break;
+
+                    case "recovered":
+                        matchesStatus = !qualified && qualifiedV2;
+                        break;
+
+                    case "lost":
+                        matchesStatus = qualified && !qualifiedV2;
+                        break;
+
+                    case "changed":
+                        matchesStatus = oldScore !== newScore;
+                        break;
+                }
+
+                return matchesSearch && matchesStatus;
+            });
+
+            filtered.sort((a, b) => {
+
+                const oldA = Number(a.dataset.old);
+                const oldB = Number(b.dataset.old);
+
+                const newA = Number(a.dataset.new);
+                const newB = Number(b.dataset.new);
+
+                const diffA = newA - oldA;
+                const diffB = newB - oldB;
+
+                switch (sort) {
+                    case "increase":
+                        return diffB - diffA;
+
+                    case "confidence":
+                        return Number(b.dataset.confidence) -
+                               Number(a.dataset.confidence);
+
+                    case "skill":
+                        return Number(b.dataset.skill) -
+                               Number(a.dataset.skill);
+
+                    case "priority":
+                        return Number(b.dataset.priority) -
+                               Number(a.dataset.priority);
+
+                    case "new_desc":
+                        return newB - newA;
+
+                    case "new_asc":
+                        return newA - newB;
+
+                    case "old_desc":
+                        return oldB - oldA;
+
+                    default:
+                        return diffA - diffB;
+                }
+            });
+
+            rows.forEach(row => row.remove());
+
+            filtered.forEach(row => {
+                tableBody.appendChild(row);
+            });
+
+            visibleCount.textContent = filtered.length;
+
+            emptyMessage.style.display =
+                filtered.length === 0 ? "block" : "none";
+        }
+
+        searchInput.addEventListener("input", applyFilters);
+        statusSelect.addEventListener("change", applyFilters);
+        sortSelect.addEventListener("change", applyFilters);
+
+        resetButton.addEventListener("click", function () {
+            searchInput.value = "";
+            statusSelect.value = "all";
+            sortSelect.value = "drop";
+            applyFilters();
+        });
+
+        applyFilters();
+    });
+</script>
+}

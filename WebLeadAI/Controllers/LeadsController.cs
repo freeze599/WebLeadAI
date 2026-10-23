@@ -319,10 +319,11 @@ namespace WebLeadAI.Controllers
 
             return View();
         }
-    
-[HttpGet]
+
+
+        [HttpGet]
         public async Task<IActionResult> QualificationAudit(
-    [FromServices] LeadQualificationService qualification)
+            [FromServices] LeadQualificationService qualification)
         {
             var leads = await _context.Leads
                 .AsNoTracking()
@@ -331,11 +332,17 @@ namespace WebLeadAI.Controllers
 
             var results = leads.Select(lead =>
             {
+                // Esošais algoritms
                 var evaluation = qualification.Evaluate(
                     lead.CompanyName,
                     lead.Description ?? "");
 
-                return new WebLeadAI.Models.LeadAuditItem
+                // Jaunais algoritms 2.0
+                var evaluationV2 = qualification.EvaluateV2(
+                    lead.CompanyName,
+                    lead.Description ?? "");
+
+                return new LeadAuditItem
                 {
                     LeadId = lead.Id,
                     Title = lead.CompanyName,
@@ -343,11 +350,20 @@ namespace WebLeadAI.Controllers
                     NewScore = evaluation.Score,
                     IsQualified = evaluation.IsQualified,
                     Reason = evaluation.Reason,
-                    CurrentStatus = lead.Status
+                    CurrentStatus = lead.Status,
+
+                    OrderConfidence = evaluationV2.OrderConfidence,
+                    SkillMatch = evaluationV2.SkillMatch,
+                    PriorityScore = evaluationV2.Score,
+                    IsQualifiedV2 = evaluationV2.IsQualified,
+                    OrderReason = evaluationV2.OrderReason,
+                    SkillReason = evaluationV2.SkillReason
                 };
             }).ToList();
 
             return View(results);
         }
 
-    } }
+
+    }
+}

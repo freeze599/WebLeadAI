@@ -27,8 +27,7 @@ namespace WebLeadAI.Services
             return report.Sum(x => x.Added);
         }
 
-        public async Task<List<LeadSourceStatistics>>
-            DiscoverWithStatisticsAsync()
+        public async Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync()
         {
             var feeds = await _rssService.GetFeedResultsAsync();
             var report = new List<LeadSourceStatistics>();
@@ -62,33 +61,36 @@ namespace WebLeadAI.Services
                     if (string.IsNullOrWhiteSpace(item.Url))
                         continue;
 
+                    // Jaunais vērtēšanas algoritms 2.2
+                    var evaluation = _qualification.EvaluateV2(
+                        item.Title,
+                        item.Description);
+
+                    if (evaluation.IsQualified)
+                        stats.Qualified++;
+
                     if (knownUrls.TryGetValue(
                         item.Url,
                         out var existingLead))
                     {
                         stats.Duplicates++;
 
+                        // Papildina trūkstošu publicēšanas datumu.
+                        // Nemaina statusu un iepriekšējo vērtējumu.
                         if (existingLead.PublishedAt == null &&
                             item.PublishedAt != null)
                         {
-                            existingLead.PublishedAt =
-                                item.PublishedAt;
+                            existingLead.PublishedAt = item.PublishedAt;
                         }
 
                         continue;
                     }
-
-                    var evaluation = _qualification.Evaluate(
-                        item.Title,
-                        item.Description);
 
                     if (!evaluation.IsQualified)
                     {
                         stats.Rejected++;
                         continue;
                     }
-
-                    stats.Qualified++;
 
                     string title = item.Title.Length > 200
                         ? item.Title[..200]
@@ -99,10 +101,7 @@ namespace WebLeadAI.Services
                         CompanyName = title,
                         SourceUrl = item.Url,
                         SourceType = "Advertisement",
-
-                        // Saglabājam tikai oriģinālo aprakstu.
                         Description = item.Description,
-
                         Status = "NeedsReview",
                         AILeadScore = evaluation.Score,
                         CreatedAt = DateTime.UtcNow,

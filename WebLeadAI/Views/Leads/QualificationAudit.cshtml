@@ -1,0 +1,157 @@
+﻿@model List<WebLeadAI.Models.LeadAuditItem>
+
+@{
+    ViewData["Title"] = "Projektu audits";
+
+    int total = Model.Count;
+    int qualified = Model.Count(x => x.IsQualified);
+    int rejected = total - qualified;
+    int changed = Model.Count(x => x.OldScore != x.NewScore);
+}
+
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between
+        align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold">Projektu vērtēšanas audits</h2>
+            <p class="text-muted">
+                Vecā un jaunā algoritma salīdzinājums.
+                Datubāze netiek mainīta.
+            </p>
+        </div>
+
+        <a asp-action="Index"
+           class="btn btn-outline-secondary">
+            ← Atpakaļ
+        </a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Visi projekti</div>
+                    <h3>@total</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Atbilstoši</div>
+                    <h3 class="text-success">@qualified</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Neatbilstoši</div>
+                    <h3 class="text-danger">@rejected</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Mainījies vērtējums</div>
+                    <h3>@changed</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Projektu salīdzinājums</h5>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped
+                table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Projekts</th>
+                        <th>Vecais</th>
+                        <th>Jaunais</th>
+                        <th>Izmaiņa</th>
+                        <th>Atbilstība</th>
+                        <th>Statuss</th>
+                        <th>Darbība</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var item in Model)
+                    {
+                        string difference =
+                            item.Difference > 0
+                                ? $"+{item.Difference}"
+                                : item.Difference.ToString();
+
+                        string diffColor =
+                            item.Difference > 0 ? "success" :
+                            item.Difference < 0 ? "danger" :
+                            "secondary";
+
+                        <tr>
+                            <td style="max-width:350px;
+                                overflow-wrap:anywhere;">
+                                <strong>@item.Title</strong>
+                                <div class="small text-muted mt-1">
+                                    @item.Reason
+                                </div>
+                            </td>
+
+                            <td>@item.OldScore</td>
+                            <td>
+                                <strong>@item.NewScore</strong>
+                            </td>
+                            <td>
+                                <span class="text-@diffColor">
+                                    @difference
+                                </span>
+                            </td>
+                            <td>
+                                @if (item.IsQualified)
+                                {
+                                    <span class="badge bg-success">
+                                        Atbilstošs
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">
+                                        Neatbilstošs
+                                    </span>
+                                }
+                            </td>
+                            <td>@item.CurrentStatus</td>
+                            <td>
+                                <a asp-action="Details"
+                                   asp-route-id="@item.LeadId"
+                                   class="btn btn-sm btn-outline-primary">
+                                    Apskatīt
+                                </a>
+                            </td>
+                        </tr>
+                    }
+
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="7"
+                                class="text-center py-4">
+                                Nav projektu auditēšanai.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

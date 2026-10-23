@@ -1,4 +1,5 @@
-﻿@model IEnumerable<WebLeadAI.Models.Lead>
+@model IEnumerable<WebLeadAI.Models.Lead>
+@using WebLeadAI.Services
 
 @{
     ViewData["Title"] = "Potenciālie klienti";
@@ -67,6 +68,68 @@
     {
         <div class="alert alert-success">
             @TempData["Success"]
+        </div>
+    }
+
+    @if (ViewBag.DiscoveryStatistics is List<LeadSourceStatistics> stats)
+    {
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Pēdējās meklēšanas statistika</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-striped align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Avots</th>
+                            <th>Nolasīti</th>
+                            <th>Atbilstoši</th>
+                            <th>Dublikāti</th>
+                            <th>Neatbilstoši jauni</th>
+                            <th>Pievienoti</th>
+                            <th>Rezultāts</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var stat in stats)
+                        {
+                            <tr>
+                                <td><strong>@stat.Source</strong></td>
+                                <td>@stat.Read</td>
+                                <td>@stat.Qualified</td>
+                                <td>@stat.Duplicates</td>
+                                <td>@stat.Rejected</td>
+                                <td><strong class="text-success">@stat.Added</strong></td>
+                                <td>
+                                    @if (stat.Error != null)
+                                    {
+                                        <span class="badge bg-danger" title="@stat.Error">Kļūda</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">OK</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td>Kopā</td>
+                            <td>@stats.Sum(x => x.Read)</td>
+                            <td>@stats.Sum(x => x.Qualified)</td>
+                            <td>@stats.Sum(x => x.Duplicates)</td>
+                            <td>@stats.Sum(x => x.Rejected)</td>
+                            <td>@stats.Sum(x => x.Added)</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="card-footer text-muted small">
+                “Atbilstoši” ietver arī jau zināmus projektus. “Dublikāti” ietver visus jau saglabātos URL neatkarīgi no vērtējuma.
+                Statistika attiecas uz pēdējo meklēšanu šajā pārlūka sesijā.
+            </div>
         </div>
     }
 
@@ -211,6 +274,13 @@
                        class="btn btn-outline-secondary">
                         Notīrīt
                     </a>
+
+                    <a asp-controller="Leads"
+                       asp-action="TestQualification"
+                       class="btn btn-outline-dark">
+                        🧪 Testēt vērtēšanu
+                    </a>
+
                 </div>
 
             </form>
@@ -285,23 +355,18 @@
                                 </span>
                             </td>
 
+
                             <td>
                                 @if (lead.PublishedAt.HasValue)
                                 {
-                                    <span>
-
-                                        @(lead.PublishedAt.Value.ToLocalTime().ToString("dd.MM.yyyy"))
-
-                                        .ToString("dd.MM.yyyy")
-                                    </span>
+                                    @(lead.PublishedAt.Value.ToLocalTime().ToString("dd.MM.yyyy"))
                                 }
                                 else
                                 {
-                                    <span class="text-muted">
-                                        Nav zināms
-                                    </span>
+                                    <span class="text-muted">Nav zināms</span>
                                 }
                             </td>
+
 
                             <td>
                                 <span class="badge bg-@color">

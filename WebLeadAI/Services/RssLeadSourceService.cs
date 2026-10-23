@@ -1,4 +1,4 @@
-﻿
+
 using System.ServiceModel.Syndication;
 using System.Xml;
 
@@ -35,10 +35,19 @@ namespace WebLeadAI.Services
 
         public async Task<List<RssLeadItem>> GetLeadsAsync()
         {
-            var results = new List<RssLeadItem>();
+            var feeds = await GetFeedResultsAsync();
+            return feeds.SelectMany(f => f.Items).ToList();
+        }
+
+        public async Task<List<RssFeedResult>> GetFeedResultsAsync()
+        {
+            var results = new List<RssFeedResult>();
 
             foreach (var feed in _feeds)
             {
+                var feedResult = new RssFeedResult { Source = feed.Key };
+                results.Add(feedResult);
+
                 try
                 {
                     _logger.LogInformation(
@@ -102,7 +111,7 @@ namespace WebLeadAI.Services
                             publishedAt = item.PublishDate.UtcDateTime;
                         }
 
-                        results.Add(new RssLeadItem
+                        feedResult.Items.Add(new RssLeadItem
                         {
                             Title = title,
                             Description = description,
@@ -125,6 +134,7 @@ namespace WebLeadAI.Services
                     ex is TaskCanceledException ||
                     ex is InvalidOperationException)
                 {
+                    feedResult.Error = ex.Message;
                     _logger.LogWarning(
                         ex,
                         "RSS avots {Source} nav pieejams.",
@@ -143,5 +153,15 @@ namespace WebLeadAI.Services
         public string Url { get; set; } = "";
         public string Source { get; set; } = "";
         public DateTime? PublishedAt { get; set; }
+    }
+}
+
+namespace WebLeadAI.Services
+{
+    public class RssFeedResult
+    {
+        public string Source { get; set; } = "";
+        public List<RssLeadItem> Items { get; set; } = new();
+        public string? Error { get; set; }
     }
 }

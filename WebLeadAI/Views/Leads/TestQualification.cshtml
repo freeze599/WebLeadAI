@@ -1,0 +1,160 @@
+﻿@using WebLeadAI.Services
+
+@{
+    ViewData["Title"] = "Vērtēšanas tests";
+
+    string testTitle = ViewBag.TestTitle ?? "";
+    string testDescription = ViewBag.TestDescription ?? "";
+
+    LeadQualificationResult? result =
+        ViewBag.TestResult as LeadQualificationResult;
+}
+
+<div class="container py-4">
+
+    <div class="d-flex justify-content-between
+        align-items-center mb-4">
+
+        <div>
+            <h2 class="fw-bold">
+                Vērtēšanas algoritma tests
+            </h2>
+
+            <p class="text-muted">
+                Pārbaudi projekta atbilstību, nemainot datubāzi.
+            </p>
+        </div>
+
+        <a asp-controller="Leads"
+           asp-action="Index"
+           class="btn btn-outline-secondary">
+            ← Atpakaļ uz projektiem
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">Projekta informācija</h5>
+        </div>
+
+        <div class="card-body">
+
+            <form asp-controller="Leads"
+                  asp-action="TestQualification"
+                  method="post">
+
+                @Html.AntiForgeryToken()
+
+                <div asp-validation-summary="All"
+                     class="text-danger mb-3"></div>
+
+                <div class="mb-3">
+                    <label for="title"
+                           class="form-label fw-semibold">
+                        Projekta nosaukums
+                    </label>
+
+                    <input id="title"
+                           name="title"
+                           type="text"
+                           maxlength="500"
+                           class="form-control"
+                           value="@testTitle"
+                           placeholder="I need a website redesign" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="description"
+                           class="form-label fw-semibold">
+                        Projekta apraksts
+                    </label>
+
+                    <textarea id="description"
+                              name="description"
+                              rows="7"
+                              maxlength="10000"
+                              class="form-control"
+                              placeholder="I am looking for a developer...">@testDescription</textarea>
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary">
+                    🔎 Pārbaudīt atbilstību
+                </button>
+
+                <a asp-action="TestQualification"
+                   class="btn btn-outline-secondary ms-2">
+                    Notīrīt
+                </a>
+
+            </form>
+        </div>
+    </div>
+
+    @if (result != null)
+    {
+        string badgeColor =
+            result.IsQualified ? "success" : "danger";
+
+        string resultText =
+            result.IsQualified
+                ? "Atbilstošs projekts"
+                : "Neatbilstošs projekts";
+
+        <div class="card shadow-sm">
+
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Vērtēšanas rezultāts</h5>
+            </div>
+
+            <div class="card-body">
+
+                <div class="row g-4 align-items-center">
+
+                    <div class="col-md-3 text-center">
+                        <div class="display-4 fw-bold">
+                            @result.Score
+                        </div>
+
+                        <span class="text-muted">
+                            no 100 punktiem
+                        </span>
+                    </div>
+
+                    <div class="col-md-9">
+
+                        <span class="badge bg-@badgeColor fs-6 mb-3">
+                            @resultText
+                        </span>
+
+                        <div class="progress mb-3"
+                             style="height: 16px;">
+
+                            <div class="progress-bar bg-@badgeColor"
+                                 role="progressbar"
+                                 style="width: @(result.Score)%"
+                                 aria-valuenow="@result.Score"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+
+                        <h6>Vērtējuma pamatojums</h6>
+
+                        <p class="mb-0">
+                            @result.Reason
+                        </p>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="alert alert-info mt-4">
+        Šis tests izmanto pašreizējo
+        LeadQualificationService algoritmu.
+        Rezultāti netiek saglabāti datubāzē.
+    </div>
+
+</div>

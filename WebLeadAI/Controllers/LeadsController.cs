@@ -1,5 +1,6 @@
-﻿
+
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using WebLeadAI.Data;
 using WebLeadAI.Models;
@@ -120,6 +121,16 @@ namespace WebLeadAI.Controllers
                     .ThenByDescending(l => l.CreatedAt)
             };
 
+            var reportJson =
+                TempData.Peek("DiscoveryStatistics") as string;
+
+            if (!string.IsNullOrEmpty(reportJson))
+            {
+                ViewBag.DiscoveryStatistics =
+                    JsonSerializer.Deserialize<List<LeadSourceStatistics>>(
+                        reportJson);
+            }
+
             return View(leads.ToList());
         }
 
@@ -186,8 +197,13 @@ namespace WebLeadAI.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Discover()
         {
-            int added =
-                await _discoveryService.DiscoverLeadsAsync();
+            var report =
+                await _discoveryService.DiscoverWithStatisticsAsync();
+
+            int added = report.Sum(x => x.Added);
+
+            TempData["DiscoveryStatistics"] =
+                JsonSerializer.Serialize(report);
 
             TempData["Success"] =
                 $"Meklēšana pabeigta. Pievienoti {added} jauni projekti.";
@@ -252,5 +268,86 @@ namespace WebLeadAI.Controllers
 
             return RedirectToAction(nameof(Index));
         }
-    }
-}
+
+        // JAUNS: vērtēšanas algoritma pārbaude
+        // Neveic nekādas datubāzes izmaiņas.
+
+        [HttpGet]
+        public IActionResult TestQualification()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public IActionResult TestQualification(
+            string? title,
+            string? description,
+            [FromServices] LeadQualificationService qualification)
+        {
+            title ??= "";
+            description ??= "";
+
+            ViewBag.TestTitle = title;
+            ViewBag.TestDescription = description;
+
+            if (string.IsNullOrWhiteSpace(title) &&
+                string.IsNullOrWhiteSpace(description))
+            {
+                ModelState.AddModelError(
+                    "",
+                    "Ievadi projekta nosaukumu vai aprakstu.");
+
+                return View();
+            }
+
+            if (title.Length > 500 ||
+                description.Length > 10000)
+            {
+                ModelState.AddModelError(
+                    "",
+                    "Teksts pārsniedz atļauto garumu.");
+
+                return View();
+            }
+
+            var result = qualification.Evaluate(
+                title,
+                description);
+
+            ViewBag.TestResult = result;
+
+            return View();
+        }
+    
+[HttpGet]
+        public async Task<IActionResult> QualificationAudit(
+    [FromServices] LeadQualificationService qualification)
+        {
+            var leads = await _context.Leads
+                .AsNoTracking()
+                .OrderByDescending(l => l.AILeadScore)
+                .ToListAsync();
+
+            var results = leads.Select(lead =>
+            {
+                var evaluation = qualification.Evaluate(
+                    lead.CompanyName,
+                    lead.Description ?? "");
+
+                return new WebLeadAI.Models.LeadAuditItem
+                {
+                    LeadId = lead.Id,
+                    Title = lead.CompanyName,
+                    OldScore = lead.AILeadScore,
+                    NewScore = evaluation.Score,
+                    IsQualified = evaluation.IsQualified,
+                    Reason = evaluation.Reason,
+                    CurrentStatus = lead.Status
+                };
+            }).ToList();
+
+            return View(results);
+        }
+
+    } }

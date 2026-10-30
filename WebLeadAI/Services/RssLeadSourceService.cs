@@ -1,3 +1,131 @@
+
+using System.ServiceModel.Syndication;
+using System.Net;
+using System.Text.RegularExpressions;
+using System.Xml;
+
+namespace WebLeadAI.Services
+{
+    public class RssLeadSourceService
+    {
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<RssLeadSourceService> _logger;
+
+        private readonly Dictionary<string, string> _feeds = new()
+        {
+            {
+                "Codeur",
+                "https://www.codeur.com/projects?format=rss"
+            },
+            {
+                "FreelanceUA",
+                "https://freelance.ua/orders/rss?t=1&cat_id=17&sub_id=0"
+            },
+            {
+                "Freelancer",
+                "https://www.freelancer.com/rss.xml"
+            }
+        };
+
+        public RssLeadSourceService(
+            HttpClient httpClient,
+            ILogger<RssLeadSourceService> logger)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+        }
+
+        public async Task<List<RssLeadItem>> GetLeadsAsync()
+        {
+            var feeds = await GetFeedResultsAsync();
+            return feeds.SelectMany(f => f.Items).ToList();
+        }
+
+        public async Task<List<RssFeedResult>> GetFeedResultsAsync()
+        {
+            var results = new List<RssFeedResult>();
+
+            foreach (var feed in _feeds)
+            {
+                var feedResult = new RssFeedResult { Source = feed.Key };
+                results.Add(feedResult);
+
+                try
+                {
+                    _logger.LogInformation(
+                        "Sāk RSS avota pārbaudi: {Source}",
+                        feed.Key);
+
+                    using var response =
+                        await _httpClient.GetAsync(feed.Value);
+
+                    response.EnsureSuccessStatusCode();
+
+                    await using var stream =
+                        await response.Content.ReadAsStreamAsync();
+
+                    using var reader = XmlReader.Create(
+                        stream,
+                        new XmlReaderSettings
+                        {
+                            DtdProcessing = DtdProcessing.Prohibit,
+                            XmlResolver = null,
+                            MaxCharactersInDocument = 5_000_000
+                        });
+
+                    var syndicationFeed =
+                        SyndicationFeed.Load(reader);
+
+                    if (syndicationFeed == null)
+                        continue;
+
+                    int count = 0;
+
+                    foreach (var item in syndicationFeed.Items)
+                    {
+                        string title = LeadContentText.ToPlainText(item.Title?.Text);
+                        string rawDescription = item.Summary?.Text
+                            ?? (item.Content as TextSyndicationContent)?.Text
+                            ?? "";
+                        string description = LeadContentText.ToPlainText(rawDescription);
+
+                        string url = item.Links
+                            .FirstOrDefault(l =>
+                                l.RelationshipType == "alternate")
+                            ?.Uri.ToString() ?? "";
+
+                        if (string.IsNullOrWhiteSpace(title) ||
+                            string.IsNullOrWhiteSpace(url))
+                            continue;
+
+                        if (!Uri.TryCreate(
+                                url,
+                                UriKind.Absolute,
+                                out var uri) ||
+                            (uri.Scheme != Uri.UriSchemeHttps &&
+                             uri.Scheme != Uri.UriSchemeHttp))
+                            continue;
+
+                        if (url.Length > 500)
+                            continue;
+
+                        DateTime? publishedAt = null;
+
+                        if (item.PublishDate != DateTimeOffset.MinValue)
+                        {
+                            publishedAt = item.PublishDate.UtcDateTime;
+                        }
+
+                        feedResult.Items.Add(new RssLeadItem
+                        {
+                            Title = title,
+                            Description = description,
+                            Url = url,
+                            Source = feed.Key,
+                            PublishedAt = publishedAt
+                        });
+
+                        count++;
                     }
 
                     _logger.LogInformation(

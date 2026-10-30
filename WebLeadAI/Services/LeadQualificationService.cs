@@ -218,7 +218,7 @@ namespace WebLeadAI.Services
             };
         }
 
-        // ALGORITMS 2.2 — RSS metadati izslēgti no vērtēšanas; 1.0 nemainīts.
+        // ALGORITMS 2.3 — prioritāte pēc prasmēm; RSS metadati izslēgti; 1.0 nemainīts.
         // IsQualified = ticams klienta pasūtījums, nevis prasmju garantija.
         public LeadQualificationResult EvaluateV2(string title, string description)
         {
@@ -372,54 +372,71 @@ namespace WebLeadAI.Services
             }
             confidence = Math.Clamp(confidence, 0, 100);
 
-            int skill = 20;
-            skillReasons.Add("Mājaslapu vai e-komercijas joma");
-            if (hasBuild)
+            // 2.3: darbu veidi dod vienu bāzes vērtējumu, nevis summējas.
+            int skill = hasBuild ? 55 : hasChanges ? 45 : hasMigration ? 30 : 20;
+            skillReasons.Add(hasBuild
+                ? "Jaunas vietnes izstrāde — tehnoloģijas un apjoms jāprecizē"
+                : hasChanges ? "Esošas vietnes uzlabošana — jāpārbauda tehnoloģijas"
+                : hasMigration ? "Migrācija — jāpārbauda platformas prasmes"
+                : "Kataloga darbi — iespējama datu ievade");
+
+            bool hasDotNet = HasAny(text, new[]
             {
-                skill += 20;
-                skillReasons.Add("Jaunas vietnes izstrāde");
-            }
-            if (hasChanges)
+                "asp.net", ".net core", "blazor", "c#", "asp net"
+            });
+            bool hasCms = HasAny(text, new[]
             {
-                skill += 15;
-                skillReasons.Add("Esošas vietnes uzlabošana");
-            }
-            if (hasMigration)
+                "wordpress", "woocommerce", "shopify", "prestashop", "joomla", "wix"
+            });
+            bool hasMarketplace = HasAny(text, new[]
             {
-                skill += 10;
-                skillReasons.Add("Vietnes migrācija — jāpārbauda platforma");
-            }
-            if (hasCatalog)
+                "marketplace", "multi-vendor", "multi vendor", "multivendor",
+                "place de marché", "place de marche", "pakalpojumu platforma",
+                "маркетплейс"
+            });
+            bool hasBookings = HasAny(text, new[]
             {
-                skill += 5;
-                skillReasons.Add("Preču datu imports — iespējams datu ievades darbs");
-            }
-            if (HasAny(text, new[] { "asp.net", ".net core", "blazor", "c#", "asp net" }))
+                "booking", "appointment", "réserver", "reserver", "réservation",
+                "reservation", "créneaux", "creneaux", "rezervāc", "rezervac",
+                "бронирован", "бронюван"
+            });
+
+            if (hasDotNet)
             {
-                skill += 40;
-                skillReasons.Add("C# / ASP.NET tehnoloģijas");
+                skill += 30;
+                skillReasons.Add("C# / ASP.NET minēts klienta tekstā vai virsrakstā");
             }
             if (HasAny(text, new[] { "linux", "nginx", "vps", "server deployment", "hosting setup" }))
             {
-                skill += 20;
-                skillReasons.Add("Linux / serveru uzstādīšana");
+                skill += 10;
+                skillReasons.Add("Linux / serveru uzstādīšanas pazīmes");
             }
             if (HasAny(text, new[] { "landing page", "site vitrine", "portfolio website", "site portfolio" }))
             {
-                skill += 20;
-                skillReasons.Add("Landing page vai portfolio");
+                skill += 10;
+                skillReasons.Add("Prezentācijas vietne vai landing page");
             }
-            if (HasAny(text, new[] { "wordpress", "woocommerce", "shopify", "prestashop", "joomla" }))
+            if (hasBookings && !hasMarketplace && !hasCms && (hasBuild || hasChanges))
             {
-                skill = Math.Min(skill, 45);
-                skillReasons.Add("CMS platforma — nepieciešama manuāla prasmju pārbaude");
+                skill += 10;
+                skillReasons.Add("Rezervāciju funkcija — iespējams ASP.NET uzdevums; apjoms jāprecizē");
+            }
+            if (hasMarketplace)
+            {
+                skill = Math.Min(skill, hasDotNet ? 60 : 45);
+                skillReasons.Add("Daudzpusēja tirdzniecības/pakalpojumu platforma — jāizvērtē apjoms un integrācijas");
+            }
+            if (hasCms)
+            {
+                skill = Math.Min(skill, 25);
+                skillReasons.Add("Minēta CMS platforma ārpus pamatprasmēm — zema prioritāte līdz manuālai pārbaudei");
             }
             skill = Math.Clamp(skill, 0, 100);
 
-            // Pasūtījuma ticamība un prasmju atbilstība ir atšķirīgi rādītāji.
+            // Atlase saglabājas pēc pasūtījuma ticamības; prioritāte: 30% pasūtījums, 70% prasmes.
             bool qualified = confidence >= 50;
             int priority = qualified
-                ? (int)Math.Round(confidence * 0.65 + skill * 0.35)
+                ? (int)Math.Round(confidence * 0.30 + skill * 0.70)
                 : 0;
             string orderReason = string.Join("; ", orderReasons);
             string skillReason = string.Join("; ", skillReasons);

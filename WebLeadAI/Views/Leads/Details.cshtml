@@ -16,6 +16,7 @@
     string statusColor = Model.Status switch
     {
         "Qualified" => "success",
+        "Contacted" => "primary",
         "Rejected" => "danger",
         "NeedsReview" => "warning",
         _ => "secondary"
@@ -95,6 +96,13 @@
                     @(Model.Email ?? "Nav norādīts")
                 </dd>
 
+                <dt class="col-sm-3">Reģistrētā uzrunāšana</dt>
+                <dd class="col-sm-9">
+                    @(Model.LastContactedAt.HasValue
+                        ? Model.LastContactedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        : "Vēl nav reģistrēta")
+                </dd>
+
                 <dt class="col-sm-3">Pievienots</dt>
                 <dd class="col-sm-9">
                     @(Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))
@@ -118,6 +126,26 @@
         <div class="card-body p-4">
 
             <h5 class="mb-3">Projekta izvērtēšana</h5>
+            <div class="border rounded p-3 mb-3">
+                <p class="small text-muted mb-2">
+                    Pēc pieteikuma nosūtīšanas oriģinālajā platformā vai e-pastā
+                    atzīmē projektu kā uzrunātu. Šī poga neko nenosūta.
+                    Ja uzrunāšanas datums jau reģistrēts, tas saglabājas.
+                </p>
+                @if (Model.Status == "Contacted" && Model.LastContactedAt.HasValue)
+                {
+                    <span class="badge bg-primary">Uzrunāts</span>
+                }
+                else
+                {
+                    <form asp-action="MarkContacted" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit" class="btn btn-primary">Atzīmēt kā uzrunātu</button>
+                    </form>
+                }
+            </div>
+
 
             <div class="d-flex gap-2 flex-wrap">
 

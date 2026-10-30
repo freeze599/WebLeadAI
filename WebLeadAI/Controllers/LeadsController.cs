@@ -250,6 +250,29 @@ namespace WebLeadAI.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> MarkContacted(int id)
+        {
+            if (!await _context.Leads.AnyAsync(l => l.Id == id))
+                return NotFound();
+
+            var now = DateTime.UtcNow;
+            // One atomic update: repeated requests preserve the recorded contact time.
+            int updated = await _context.Leads
+                .Where(l => l.Id == id &&
+                    (l.Status != "Contacted" || l.LastContactedAt == null))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(l => l.Status, "Contacted")
+                    .SetProperty(l => l.LastContactedAt, l => l.LastContactedAt ?? now));
+
+            TempData["Success"] = updated > 0
+                ? "Projekts atzīmēts kā uzrunāts. Ziņa klientam netika sūtīta."
+                : "Projekts jau ir atzīmēts kā uzrunāts. Datums nav mainīts.";
+
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateStatus(
             int id,
             string status)

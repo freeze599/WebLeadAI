@@ -210,7 +210,7 @@
                         <option value="NeedsReview" selected="@(status == "NeedsReview")">NeedsReview</option>
                         <option value="Qualified" selected="@(status == "Qualified")">Qualified</option>
                         <option value="Rejected" selected="@(status == "Rejected")">Rejected</option>
-                        <option value="Contacted" selected="@(status == "Contacted")">Contacted</option>
+                        <option value="Contacted" selected="@(status == "Contacted")">Uzrunāti (Contacted)</option>
                     </select>
                 </div>
 
@@ -342,6 +342,7 @@
                         string color = lead.Status switch
                         {
                             "Qualified" => "success",
+                            "Contacted" => "primary",
                             "Rejected" => "danger",
                             "NeedsReview" => "warning",
                             _ => "secondary"
@@ -421,8 +422,14 @@
 
                             <td>
                                 <span class="badge bg-@color">
-                                    @lead.Status
+                                    @(lead.Status == "Contacted" ? "Uzrunāts" : lead.Status)
                                 </span>
+                                @if (lead.LastContactedAt.HasValue)
+                                {
+                                    <div class="small text-muted mt-1" title="Reģistrētā uzrunāšana">
+                                        @(lead.LastContactedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))
+                                    </div>
+                                }
                             </td>
 
                             <td>

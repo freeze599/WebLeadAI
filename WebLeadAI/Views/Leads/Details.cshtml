@@ -6,6 +6,12 @@
     string displayTitle = LeadContentText.ToPlainText(Model.CompanyName);
     string displayDescription = LeadContentText.ToPlainText(Model.Description);
 
+    bool frenchSource = Uri.TryCreate(Model.SourceUrl, UriKind.Absolute, out var proposalUri)
+        && (proposalUri.Host.Equals("codeur.com", StringComparison.OrdinalIgnoreCase)
+            || proposalUri.Host.EndsWith(".codeur.com", StringComparison.OrdinalIgnoreCase));
+    string proposalLanguage = frenchSource ? "fr" : "en";
+    string proposalDraft = LeadProposalService.Build(Model.CompanyName, proposalLanguage);
+
     string statusColor = Model.Status switch
     {
         "Qualified" => "success",
@@ -173,4 +179,90 @@
         </div>
     </div>
 
+    <div class="card shadow-sm mt-4">
+        <div class="card-body p-4">
+            <h5>Pieteikuma melnraksts</h5>
+            <p class="text-muted small">
+                Veidnes teksts ar projekta nosaukumu. Pirms nosūtīšanas pielāgo to pilnajām
+                prasībām, aizpildi laukus kvadrātiekavās un izņem jau atbildētos jautājumus.
+                Melnraksts netiek saglabāts; pirms lapas aizvēršanas nokopē savu tekstu.
+                Kopēšana neko nenosūta un nemaina projekta statusu.
+            </p>
+            <div class="d-flex gap-2 align-items-end flex-wrap mb-3">
+                <div>
+                    <label for="proposalLanguage" class="form-label">Melnraksta valoda</label>
+                    <select id="proposalLanguage" class="form-select">
+                        <option value="lv">Latviešu</option>
+                        <option value="en" selected="@(proposalLanguage == "en")">English</option>
+                        <option value="fr" selected="@(proposalLanguage == "fr")">Français</option>
+                    </select>
+                </div>
+                <button id="restoreProposal" type="button" class="btn btn-outline-secondary">
+                    Atjaunot veidni
+                </button>
+            </div>
+            <label for="proposalDraft" class="form-label">Rediģē pieteikuma tekstu</label>
+            <textarea id="proposalDraft" class="form-control" rows="18">@proposalDraft</textarea>
+            <div class="d-flex gap-3 align-items-center flex-wrap mt-3">
+                <button id="copyProposal" type="button" class="btn btn-primary">
+                    Kopēt pieteikumu
+                </button>
+                <span id="proposalMessage" class="small" role="status" aria-live="polite"></span>
+            </div>
+            <textarea id="proposalTemplate-lv" hidden>@LeadProposalService.Build(Model.CompanyName, "lv")</textarea>
+            <textarea id="proposalTemplate-en" hidden>@LeadProposalService.Build(Model.CompanyName, "en")</textarea>
+            <textarea id="proposalTemplate-fr" hidden>@LeadProposalService.Build(Model.CompanyName, "fr")</textarea>
+        </div>
+    </div>
+
 </div>
+
+
+@section Scripts {
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const editor = document.getElementById("proposalDraft");
+    const language = document.getElementById("proposalLanguage");
+    const message = document.getElementById("proposalMessage");
+    let currentLanguage = language.value;
+    let baseline = editor.value;
+
+    function restoreTemplate() {
+        if (editor.value !== baseline &&
+            !window.confirm("Aizvietot tavas izmaiņas ar izvēlētās valodas veidni?")) {
+            language.value = currentLanguage;
+            return;
+        }
+        currentLanguage = language.value;
+        editor.value = document.getElementById("proposalTemplate-" + currentLanguage).value;
+        baseline = editor.value;
+        message.textContent = "";
+    }
+
+    language.addEventListener("change", restoreTemplate);
+    document.getElementById("restoreProposal").addEventListener("click", restoreTemplate);
+    editor.addEventListener("input", function () { message.textContent = ""; });
+    document.getElementById("copyProposal").addEventListener("click", async function () {
+        if (!editor.value.trim()) {
+            message.textContent = "Ievadi pieteikuma tekstu.";
+            return;
+        }
+        try {
+            if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("Clipboard unavailable");
+            await navigator.clipboard.writeText(editor.value);
+            message.textContent = "Pieteikums nokopēts. Pirms nosūtīšanas pārbaudi tekstu.";
+        } catch {
+            editor.focus();
+            editor.select();
+            message.textContent = "Automātiska kopēšana nav pieejama. Teksts atlasīts — nospied Ctrl+C (Mac: Cmd+C).";
+        }
+    });
+    window.addEventListener("beforeunload", function (event) {
+        if (editor.value !== baseline) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
+});
+</script>
+}

@@ -5,6 +5,7 @@
     ViewData["Title"] = "Potenciālie klienti";
 
     var leads = Model.ToList();
+    var qualificationService = new LeadQualificationService();
 
     string search = ViewBag.Search ?? "";
     string status = ViewBag.Status ?? "";
@@ -62,6 +63,10 @@
             </button>
         </form>
 
+        <a asp-action="QualificationAudit"
+           class="btn btn-outline-secondary">
+            Vērtēšanas audits
+        </a>
     </div>
 
     @if (TempData["Success"] != null)
@@ -247,10 +252,10 @@
 
                     <select name="sort" class="form-select">
                         <option value="score" selected="@(sort == "score")">
-                            Labākais vērtējums
+                            Augstākā prioritāte
                         </option>
                         <option value="score_asc" selected="@(sort == "score_asc")">
-                            Zemākais vērtējums
+                            Zemākā prioritāte
                         </option>
                         <option value="newest" selected="@(sort == "newest")">
                             Jaunākie pievienotie
@@ -264,7 +269,7 @@
                     </select>
                 </div>
 
-                <div class="col-md-2 d-flex gap-2">
+                <div class="col-12 d-flex gap-2 flex-wrap">
                     <button type="submit"
                             class="btn btn-primary">
                         Filtrēt
@@ -287,6 +292,19 @@
         </div>
     </div>
 
+    <div class="alert alert-light border">
+        <strong>Kā lasīt vērtējumus:</strong>
+        Pasūtījuma ticamība rāda klienta pieprasījuma pazīmes,
+        prasmju atbilstība — projekta saistību ar tavām tehnoloģijām.
+        Tie ir algoritmiski punkti, nevis varbūtības.
+        <div class="small text-muted mt-1">
+            Prioritāte ir datubāzē saglabātais vērtējums, pēc kura kārto sarakstu.
+            Pasūtījuma un prasmju rādītāji tiek aprēķināti ar algoritmu 2.3.
+            Ja prioritāte atšķiras no pašreizējā aprēķina, nospied “Pārvērtēt projektus”.
+            Statuss rāda saglabāto izvērtēšanas lēmumu.
+        </div>
+    </div>
+
     <div class="card shadow-sm">
 
         <div class="card-header bg-white py-3
@@ -306,7 +324,9 @@
                     <tr>
                         <th>Projekts</th>
                         <th>Avots</th>
-                        <th>Vērtējums</th>
+                        <th>Pasūtījuma ticamība</th>
+                        <th>Prasmju atbilstība</th>
+                        <th>Prioritāte</th>
                         <th>Publicēts</th>
                         <th>Statuss</th>
                         <th>Darbības</th>
@@ -316,6 +336,9 @@
                 <tbody>
                     @foreach (var lead in leads)
                     {
+                        var evaluation = qualificationService.EvaluateV2(
+                            lead.CompanyName ?? "", lead.Description ?? "");
+
                         string color = lead.Status switch
                         {
                             "Qualified" => "success",
@@ -350,9 +373,37 @@
                             </td>
 
                             <td>
-                                <span class="badge bg-secondary">
-                                    @lead.AILeadScore / 100
+                                <span class="badge bg-info text-dark">
+                                    @evaluation.OrderConfidence / 100
                                 </span>
+                                <details class="small text-muted mt-1">
+                                    <summary>Pamatojums</summary>
+                                    <div class="mt-1" style="min-width:160px; overflow-wrap:anywhere;">
+                                        @evaluation.OrderReason
+                                    </div>
+                                </details>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-primary">
+                                    @evaluation.SkillMatch / 100
+                                </span>
+                                <details class="small text-muted mt-1">
+                                    <summary>Pamatojums</summary>
+                                    <div class="mt-1" style="min-width:160px; overflow-wrap:anywhere;">
+                                        @evaluation.SkillReason
+                                    </div>
+                                </details>
+                            </td>
+
+                            <td>
+                                <strong class="text-nowrap">@lead.AILeadScore / 100</strong>
+                                @if (lead.AILeadScore != evaluation.Score)
+                                {
+                                    <div class="small text-warning-emphasis mt-1">
+                                        Jāpārvērtē: jaunais @evaluation.Score / 100
+                                    </div>
+                                }
                             </td>
 
 
@@ -387,7 +438,7 @@
                     @if (!leads.Any())
                     {
                         <tr>
-                            <td colspan="6"
+                            <td colspan="8"
                                 class="text-center text-muted py-4">
                                 Nav projektu, kas atbilst filtriem.
                             </td>

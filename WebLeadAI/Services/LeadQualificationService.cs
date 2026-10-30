@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -218,12 +218,14 @@ namespace WebLeadAI.Services
             };
         }
 
-        // ALGORITMS 2.2 — audits; 1.0 Evaluate() netiek mainīts.
+        // ALGORITMS 2.2 — RSS metadati izslēgti no vērtēšanas; 1.0 nemainīts.
         // IsQualified = ticams klienta pasūtījums, nevis prasmju garantija.
         public LeadQualificationResult EvaluateV2(string title, string description)
         {
             string heading = Normalize(title);
-            string text = Normalize($"{title} {description}");
+            // Vērtē klienta tekstu, nevis RSS kategorijas un platformas birkas.
+            string requestDescription = LeadContentText.ForEvaluation(description);
+            string text = Normalize($"{title} {requestDescription}");
             var orderReasons = new List<string>();
             var skillReasons = new List<string>();
 

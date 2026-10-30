@@ -1,7 +1,10 @@
-﻿@model WebLeadAI.Models.Lead
+@model WebLeadAI.Models.Lead
+@using WebLeadAI.Services
 
 @{
     ViewData["Title"] = "Projekta detaļas";
+    string displayTitle = LeadContentText.ToPlainText(Model.CompanyName);
+    string displayDescription = LeadContentText.ToPlainText(Model.Description);
 
     string statusColor = Model.Status switch
     {
@@ -47,7 +50,7 @@
         <div class="card-body p-4">
 
             <h3 class="mb-3">
-                @Model.CompanyName
+                @displayTitle
             </h3>
 
             <div class="mb-3">
@@ -65,10 +68,7 @@
             <h5>Projekta apraksts</h5>
 
             <div class="border rounded p-3 bg-light mb-4"
-                 style="white-space:pre-wrap;
-                overflow-wrap:anywhere;">
-                @Model.Description
-            </div>
+                 style="white-space:pre-wrap; overflow-wrap:anywhere;">@(string.IsNullOrWhiteSpace(displayDescription) ? "Apraksts nav norādīts." : displayDescription)</div>
 
             <h5>Informācija</h5>
 
@@ -90,8 +90,7 @@
 
                 <dt class="col-sm-3">Pievienots</dt>
                 <dd class="col-sm-9">
-                    @Model.CreatedAt.ToLocalTime()
-                    .ToString("dd.MM.yyyy HH:mm")
+                    @(Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm"))
                 </dd>
             </dl>
 

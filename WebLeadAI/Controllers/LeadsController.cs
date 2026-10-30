@@ -254,7 +254,7 @@ namespace WebLeadAI.Controllers
 
             foreach (var lead in leads)
             {
-                var result = qualification.Evaluate(
+                var result = qualification.EvaluateV2(
                     lead.CompanyName,
                     lead.Description ?? "");
 
@@ -264,7 +264,7 @@ namespace WebLeadAI.Controllers
             await _context.SaveChangesAsync();
 
             TempData["Success"] =
-                $"Pārvērtēti {leads.Count} projekti. Statusi saglabāti.";
+                $"Pārvērtēti {leads.Count} projekti ar algoritmu 2.2. Statusi saglabāti.";
 
             return RedirectToAction(nameof(Index));
         }
@@ -311,7 +311,7 @@ namespace WebLeadAI.Controllers
                 return View();
             }
 
-            var result = qualification.Evaluate(
+            var result = qualification.EvaluateV2(
                 title,
                 description);
 
@@ -337,7 +337,7 @@ namespace WebLeadAI.Controllers
                     lead.CompanyName,
                     lead.Description ?? "");
 
-                // Jaunais algoritms 2.0
+                // Jaunais algoritms 2.2
                 var evaluationV2 = qualification.EvaluateV2(
                     lead.CompanyName,
                     lead.Description ?? "");

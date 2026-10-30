@@ -386,7 +386,8 @@ namespace WebLeadAI.Services
             });
             bool hasCms = HasAny(text, new[]
             {
-                "wordpress", "woocommerce", "shopify", "prestashop", "joomla", "wix"
+                "wordpress", "woocommerce", "shopify", "prestashop", "joomla", "wix",
+                "opencart", "open cart", "опенкарт", "опен карт"
             });
             bool hasMarketplace = HasAny(text, new[]
             {

@@ -44,6 +44,17 @@ namespace WebLeadAI.Migrations
                     b.Property<DateTime?>("LastContactedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ProposalDraft")
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProposalLanguage")
+                        .HasMaxLength(2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProposalSavedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("TEXT");
 

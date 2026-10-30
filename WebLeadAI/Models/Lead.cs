@@ -1,4 +1,4 @@
-﻿
+
 using System;
 using System.ComponentModel.DataAnnotations;
 
@@ -32,6 +32,14 @@ namespace WebLeadAI.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? LastContactedAt { get; set; }
+
+        [StringLength(20000)]
+        public string? ProposalDraft { get; set; }
+
+        [StringLength(2)]
+        public string? ProposalLanguage { get; set; }
+
+        public DateTime? ProposalSavedAt { get; set; }
 
         // Kad sludinājums publicēts sākotnējā avotā.
         // Null nozīmē, ka datums nav zināms.

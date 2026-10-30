@@ -9,8 +9,9 @@
     bool frenchSource = Uri.TryCreate(Model.SourceUrl, UriKind.Absolute, out var proposalUri)
         && (proposalUri.Host.Equals("codeur.com", StringComparison.OrdinalIgnoreCase)
             || proposalUri.Host.EndsWith(".codeur.com", StringComparison.OrdinalIgnoreCase));
-    string proposalLanguage = frenchSource ? "fr" : "en";
-    string proposalDraft = LeadProposalService.Build(Model.CompanyName, proposalLanguage);
+    string proposalLanguage = Model.ProposalLanguage is "lv" or "en" or "fr"
+        ? Model.ProposalLanguage : (frenchSource ? "fr" : "en");
+    string proposalDraft = Model.ProposalDraft ?? LeadProposalService.Build(Model.CompanyName, proposalLanguage);
 
     string statusColor = Model.Status switch
     {
@@ -185,14 +186,22 @@
             <p class="text-muted small">
                 Veidnes teksts ar projekta nosaukumu. Pirms nosūtīšanas pielāgo to pilnajām
                 prasībām, aizpildi laukus kvadrātiekavās un izņem jau atbildētos jautājumus.
-                Melnraksts netiek saglabāts; pirms lapas aizvēršanas nokopē savu tekstu.
+                Izmaiņas saglabā ar pogu “Saglabāt melnrakstu”. Katram projektam glabājas viens melnraksts.
                 Kopēšana neko nenosūta un nemaina projekta statusu.
             </p>
+            <p id="proposalSavedAt" class="small text-muted">
+                @(Model.ProposalSavedAt.HasValue
+                    ? "Pēdējoreiz saglabāts: " + Model.ProposalSavedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                    : "Melnraksts vēl nav saglabāts.")
+            </p>
+            <form id="proposalForm" asp-action="SaveProposal" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.Id" />
             <div class="d-flex gap-2 align-items-end flex-wrap mb-3">
                 <div>
                     <label for="proposalLanguage" class="form-label">Melnraksta valoda</label>
-                    <select id="proposalLanguage" class="form-select">
-                        <option value="lv">Latviešu</option>
+                    <select id="proposalLanguage" name="proposalLanguage" class="form-select">
+                        <option value="lv" selected="@(proposalLanguage == "lv")">Latviešu</option>
                         <option value="en" selected="@(proposalLanguage == "en")">English</option>
                         <option value="fr" selected="@(proposalLanguage == "fr")">Français</option>
                     </select>
@@ -202,13 +211,15 @@
                 </button>
             </div>
             <label for="proposalDraft" class="form-label">Rediģē pieteikuma tekstu</label>
-            <textarea id="proposalDraft" class="form-control" rows="18">@proposalDraft</textarea>
+            <textarea id="proposalDraft" name="proposalDraft" class="form-control" rows="18" maxlength="20000" required>@proposalDraft</textarea>
             <div class="d-flex gap-3 align-items-center flex-wrap mt-3">
+                <button id="saveProposal" type="submit" class="btn btn-success">Saglabāt melnrakstu</button>
                 <button id="copyProposal" type="button" class="btn btn-primary">
                     Kopēt pieteikumu
                 </button>
                 <span id="proposalMessage" class="small" role="status" aria-live="polite"></span>
             </div>
+            </form>
             <textarea id="proposalTemplate-lv" hidden>@LeadProposalService.Build(Model.CompanyName, "lv")</textarea>
             <textarea id="proposalTemplate-en" hidden>@LeadProposalService.Build(Model.CompanyName, "en")</textarea>
             <textarea id="proposalTemplate-fr" hidden>@LeadProposalService.Build(Model.CompanyName, "fr")</textarea>
@@ -226,17 +237,19 @@ document.addEventListener("DOMContentLoaded", function () {
     const message = document.getElementById("proposalMessage");
     let currentLanguage = language.value;
     let baseline = editor.value;
+    let baselineLanguage = language.value;
+    const form = document.getElementById("proposalForm");
+    const saveButton = document.getElementById("saveProposal");
 
     function restoreTemplate() {
-        if (editor.value !== baseline &&
+        if (editor.value !== document.getElementById("proposalTemplate-" + currentLanguage).value &&
             !window.confirm("Aizvietot tavas izmaiņas ar izvēlētās valodas veidni?")) {
             language.value = currentLanguage;
             return;
         }
         currentLanguage = language.value;
         editor.value = document.getElementById("proposalTemplate-" + currentLanguage).value;
-        baseline = editor.value;
-        message.textContent = "";
+        message.textContent = "Veidne atjaunota. Izmaiņas vēl nav saglabātas.";
     }
 
     language.addEventListener("change", restoreTemplate);
@@ -257,8 +270,42 @@ document.addEventListener("DOMContentLoaded", function () {
             message.textContent = "Automātiska kopēšana nav pieejama. Teksts atlasīts — nospied Ctrl+C (Mac: Cmd+C).";
         }
     });
+    form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (saveButton.disabled) return;
+        if (!editor.value.trim()) {
+            message.textContent = "Ievadi pieteikuma tekstu.";
+            return;
+        }
+        const submittedText = editor.value;
+        const submittedLanguage = language.value;
+        const data = new FormData(form);
+        saveButton.disabled = true;
+        message.textContent = "Saglabā...";
+        try {
+            const response = await fetch(form.action, {
+                method: "POST", body: data, credentials: "same-origin"
+            });
+            const result = await response.json().catch(() => null);
+            if (!response.ok || !result || !result.savedAt)
+                throw new Error(result?.message || "Neizdevās saglabāt. Teksts paliek redaktorā; pārbaudi, vai lietotne darbojas, un mēģini vēlreiz.");
+            baseline = submittedText;
+            baselineLanguage = submittedLanguage;
+            document.getElementById("proposalSavedAt").textContent =
+                "Pēdējoreiz saglabāts: " + new Date(result.savedAt).toLocaleString("lv-LV");
+            message.textContent = editor.value === baseline && language.value === baselineLanguage
+                ? "Melnraksts saglabāts."
+                : "Iepriekšējā versija saglabāta; jaunākās izmaiņas vēl jāsaglabā.";
+        } catch (error) {
+            message.textContent = error instanceof TypeError
+                ? "Nav savienojuma. Teksts paliek redaktorā; pēc savienojuma atjaunošanas saglabā vēlreiz."
+                : error.message;
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
     window.addEventListener("beforeunload", function (event) {
-        if (editor.value !== baseline) {
+        if (editor.value !== baseline || language.value !== baselineLanguage) {
             event.preventDefault();
             event.returnValue = "";
         }

@@ -165,6 +165,43 @@ namespace WebLeadAI.Controllers
             return View(lead);
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SaveProposal(
+            int id, string? proposalDraft, string? proposalLanguage)
+        {
+            if (!ModelState.IsValid ||
+                string.IsNullOrWhiteSpace(proposalDraft) ||
+                proposalDraft.Length > 20000)
+                return BadRequest(new { message = "Ievadi melnrakstu līdz 20 000 rakstzīmēm." });
+
+            if (proposalLanguage != "lv" && proposalLanguage != "en" && proposalLanguage != "fr")
+                return BadRequest(new { message = "Izvēlies atbalstītu valodu." });
+
+            var lead = await _context.Leads.FirstOrDefaultAsync(l => l.Id == id);
+            if (lead == null)
+                return NotFound(new { message = "Projekts nav atrasts." });
+
+            lead.ProposalDraft = proposalDraft;
+            lead.ProposalLanguage = proposalLanguage;
+            lead.ProposalSavedAt = DateTime.UtcNow;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return StatusCode(500, new { message = "Neizdevās saglabāt datubāzē. Teksts paliek redaktorā; mēģini vēlreiz." });
+            }
+
+            return Json(new
+            {
+                message = "Melnraksts saglabāts.",
+                savedAt = lead.ProposalSavedAt
+            });
+        }
+
         [HttpGet]
         public IActionResult Create()
         {
@@ -264,7 +301,7 @@ namespace WebLeadAI.Controllers
             await _context.SaveChangesAsync();
 
             TempData["Success"] =
-                $"Pārvērtēti {leads.Count} projekti ar algoritmu 2.2. Statusi saglabāti.";
+                $"Pārvērtēti {leads.Count} projekti ar algoritmu 2.3. Statusi saglabāti.";
 
             return RedirectToAction(nameof(Index));
         }
@@ -337,7 +374,7 @@ namespace WebLeadAI.Controllers
                     lead.CompanyName,
                     lead.Description ?? "");
 
-                // Jaunais algoritms 2.2
+                // Jaunais algoritms 2.3
                 var evaluationV2 = qualification.EvaluateV2(
                     lead.CompanyName,
                     lead.Description ?? "");

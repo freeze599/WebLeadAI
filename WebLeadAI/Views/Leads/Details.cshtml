@@ -5,6 +5,7 @@
     ViewData["Title"] = "Projekta detaļas";
     string displayTitle = LeadContentText.ToPlainText(Model.CompanyName);
     string displayDescription = LeadContentText.ToPlainText(Model.Description);
+    var soloFit = SoloFitService.Evaluate(Model);
     // IUB paziņojumu kopsavilkuma lauki jau atrodas Description; bez datubāzes migrācijas.
     bool isProcurement = Model.SourceType == "Procurement";
     string? procurementBudget = null;
@@ -125,6 +126,25 @@
                 </div>
                 <p class="text-muted small">Informācija nolasīta no saglabātā IUB apraksta. Pirms pieteikšanās pārbaudi aktuālos datus EIS.</p>
             }
+
+            <div class="border rounded p-3 mb-4">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                    <h5 class="mb-0">Piemērotība individuālam izstrādātājam</h5>
+                    <span class="badge bg-@soloFit.CssClass">@soloFit.Level</span>
+                </div>
+                <p class="mb-2"><strong>Sarežģītība:</strong> @soloFit.Complexity</p>
+                <p class="mb-2">@soloFit.Summary</p>
+                @if (soloFit.Notes.Count > 0)
+                {
+                    <ul class="mb-2">
+                        @foreach (var note in soloFit.Notes)
+                        {
+                            <li>@note</li>
+                        }
+                    </ul>
+                }
+                <p class="text-muted small mb-0">Automātisks orientējošs izvērtējums pēc saglabātā apraksta, nevis garantija vai oficiāla iepirkuma prasību pārbaude. Esošais prioritātes vērtējums netiek mainīts.</p>
+            </div>
 
             <h5>Projekta apraksts</h5>
 

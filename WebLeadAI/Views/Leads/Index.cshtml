@@ -14,6 +14,8 @@
     string age = ViewBag.Age ?? "";
     string budget = ViewBag.Budget ?? "";
     string deadline = ViewBag.Deadline ?? "";
+    string soloFit = ViewBag.SoloFit ?? "";
+    string actionable = ViewBag.Actionable ?? "";
 
     var sources = ViewBag.Sources as List<string>
         ?? new List<string>();
@@ -253,6 +255,8 @@
                     <label class="form-label">Kārtošana</label>
 
                     <select name="sort" class="form-select">
+                        <option value="actionable" selected="@(sort == "actionable")">Ieteicamie klienti vispirms</option>
+                        <option value="solo" selected="@(sort == "solo")">Solo piemērotība vispirms</option>
                         <option value="score" selected="@(sort == "score")">
                             Augstākā prioritāte
                         </option>
@@ -291,6 +295,26 @@
                     </select>
                 </div>
 
+                <div class="col-md-3">
+                    <label class="form-label">Solo piemērotība</label>
+                    <select name="soloFit" class="form-select">
+                        <option value="">Visi projekti</option>
+                        <option value="possible" selected="@(soloFit == "possible")">Iespējams piemērots</option>
+                        <option value="review" selected="@(soloFit == "review")">Jāpārbauda</option>
+                        <option value="low" selected="@(soloFit == "low")">Zema solo piemērotība</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Uzrunāšanas lietderība</label>
+                    <select name="actionable" class="form-select">
+                        <option value="">Visi projekti</option>
+                        <option value="recommended" selected="@(actionable == "recommended")">Ieteicamie klienti</option>
+                        <option value="review" selected="@(actionable == "review")">Jāpārbauda</option>
+                        <option value="skip" selected="@(actionable == "skip")">Nav ieteicams</option>
+                    </select>
+                </div>
+
                 <div class="col-12 d-flex gap-2 flex-wrap">
                     <button type="submit"
                             class="btn btn-primary">
@@ -319,6 +343,10 @@
         Pasūtījuma ticamība rāda klienta pieprasījuma pazīmes,
         prasmju atbilstība — projekta saistību ar tavām tehnoloģijām.
         Tie ir algoritmiski punkti, nevis varbūtības.
+        <div class="small text-muted mt-1">
+            Jaunā uzrunāšanas lietderība ņem vērā prioritāti, solo piemērotību, statusu, publicēšanas datumu un iespējamus valodas šķēršļus. Tas nav garantēts pasūtījums.
+            Solo piemērotība ir orientējošs novērtējums pēc sludinājuma apraksta, nevis garantija par darba apjomu vai iepirkuma prasībām.
+        </div>
         <div class="small text-muted mt-1">
             Prioritāte ir datubāzē saglabātais vērtējums, pēc kura kārto sarakstu.
             Pasūtījuma un prasmju rādītāji tiek aprēķināti ar algoritmu 2.3.
@@ -349,6 +377,8 @@
                         <th>Pasūtījuma ticamība</th>
                         <th>Prasmju atbilstība</th>
                         <th>Prioritāte</th>
+                        <th>Solo piemērotība</th>
+                        <th>Uzrunāšana</th>
                         <th>Publicēts</th>
                         <th>Statuss</th>
                         <th>Darbības</th>
@@ -360,6 +390,8 @@
                     {
                         var evaluation = qualificationService.EvaluateV2(
                             lead.CompanyName ?? "", lead.Description ?? "");
+                        var solo = SoloFitService.Evaluate(lead);
+                        var action = ActionabilityService.Evaluate(lead);
 
                         string color = lead.Status switch
                         {
@@ -431,6 +463,23 @@
 
 
                             <td>
+                                <span class="badge bg-@solo.CssClass">@solo.Level</span>
+                                <div class="small text-muted mt-1">@solo.Complexity</div>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-@action.CssClass">@action.Label</span>
+                                <details class="small text-muted mt-1">
+                                    <summary>Pamatojums</summary>
+                                    <div>@action.Explanation</div>
+                                    @foreach (var note in action.Notes)
+                                    {
+                                        <div>• @note</div>
+                                    }
+                                </details>
+                            </td>
+
+                            <td>
                                 @if (lead.PublishedAt.HasValue)
                                 {
                                     @(lead.PublishedAt.Value.ToLocalTime().ToString("dd.MM.yyyy"))
@@ -467,7 +516,7 @@
                     @if (!leads.Any())
                     {
                         <tr>
-                            <td colspan="8"
+                            <td colspan="10"
                                 class="text-center text-muted py-4">
                                 Nav projektu, kas atbilst filtriem.
                             </td>

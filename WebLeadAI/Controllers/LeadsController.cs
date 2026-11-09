@@ -29,7 +29,9 @@ namespace WebLeadAI.Controllers
             string? sort,
             string? age,
             string? budget,
-            string? deadline)
+            string? deadline,
+            string? soloFit,
+            string? actionable)
         {
             var allLeads = await _context.Leads
                 .AsNoTracking()
@@ -56,6 +58,8 @@ namespace WebLeadAI.Controllers
             ViewBag.Age = age ?? "";
             ViewBag.Budget = budget ?? "";
             ViewBag.Deadline = deadline ?? "";
+            ViewBag.SoloFit = soloFit ?? "";
+            ViewBag.Actionable = actionable ?? "";
 
             IEnumerable<Lead> leads = allLeads;
 
@@ -133,7 +137,52 @@ namespace WebLeadAI.Controllers
                 };
             }
 
-            leads = sort switch
+            // Solo piemērotība ir orientējošs aprēķins; statusi un prioritātes netiek mainītas.
+            // Novērtējumu aprēķinām vienreiz katram kandidātam, lai šķirošana
+            // un filtrēšana izmantotu tieši to pašu rezultātu kā detaļu skats.
+            var withSolo = leads.Select(l => new
+            {
+                Lead = l,
+                Assessment = SoloFitService.Evaluate(l)
+            }).ToList();
+
+            if (soloFit is "possible" or "review" or "low")
+            {
+                withSolo = withSolo.Where(x => SoloCategory(x.Assessment.Level) == soloFit).ToList();
+            }
+
+            // Ieteikumu aprēķina atsevišķi; neietekmē datubāzē saglabāto AILeadScore.
+            var assessed = withSolo.Select(x => new
+            {
+                x.Lead,
+                x.Assessment,
+                Action = ActionabilityService.Evaluate(x.Lead)
+            }).ToList();
+            if (actionable is "recommended" or "review" or "skip")
+                assessed = assessed.Where(x => x.Action.Category == actionable).ToList();
+            withSolo = assessed.Select(x => new { x.Lead, x.Assessment }).ToList();
+            if (sort == "actionable")
+            {
+                leads = assessed.OrderBy(x => x.Action.Rank)
+                    .ThenByDescending(x => x.Lead.AILeadScore)
+                    .ThenByDescending(x => x.Lead.CreatedAt)
+                    .Select(x => x.Lead);
+            }
+            else
+            if (sort == "solo")
+            {
+                leads = withSolo
+                    .OrderBy(x => SoloRank(x.Assessment.Level))
+                    .ThenByDescending(x => x.Lead.AILeadScore)
+                    .ThenByDescending(x => x.Lead.CreatedAt)
+                    .Select(x => x.Lead);
+            }
+            else
+            {
+                leads = withSolo.Select(x => x.Lead);
+            }
+
+            leads = sort is "solo" or "actionable" ? leads : sort switch
             {
                 "newest" => leads
                     .OrderByDescending(l => l.CreatedAt),
@@ -166,6 +215,20 @@ namespace WebLeadAI.Controllers
 
             return View(leads.ToList());
         }
+
+        private static string SoloCategory(string level) => level switch
+        {
+            "Iespējams piemērots" => "possible",
+            "Zema solo piemērotība" => "low",
+            _ => "review"
+        };
+
+        private static int SoloRank(string level) => SoloCategory(level) switch
+        {
+            "possible" => 0,
+            "review" => 1,
+            _ => 2
+        };
 
         private static string GetSource(Lead lead)
         {

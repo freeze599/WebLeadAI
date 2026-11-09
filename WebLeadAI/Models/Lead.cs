@@ -41,6 +41,12 @@ namespace WebLeadAI.Models
 
         public DateTime? ProposalSavedAt { get; set; }
 
+        // IUB iepirkuma strukturētie dati. Null = nav droši zināms.
+        public decimal? EstimatedBudget { get; set; }
+        public DateTime? SubmissionDeadline { get; set; } // Latvijas vietējais laiks
+        [StringLength(300)]
+        public string? BuyerName { get; set; }
+
         // Kad sludinājums publicēts sākotnējā avotā.
         // Null nozīmē, ka datums nav zināms.
         public DateTime? PublishedAt { get; set; }

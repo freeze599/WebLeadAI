@@ -27,7 +27,9 @@ namespace WebLeadAI.Controllers
             string? status,
             string? source,
             string? sort,
-            string? age)
+            string? age,
+            string? budget,
+            string? deadline)
         {
             var allLeads = await _context.Leads
                 .AsNoTracking()
@@ -52,6 +54,8 @@ namespace WebLeadAI.Controllers
             ViewBag.Source = source ?? "";
             ViewBag.Sort = sort ?? "score";
             ViewBag.Age = age ?? "";
+            ViewBag.Budget = budget ?? "";
+            ViewBag.Deadline = deadline ?? "";
 
             IEnumerable<Lead> leads = allLeads;
 
@@ -99,6 +103,35 @@ namespace WebLeadAI.Controllers
 
                 _ => leads
             };
+
+            // Budžeta un termiņa filtri ir piemērojami tikai IUB iepirkumiem.
+            if (!string.IsNullOrWhiteSpace(budget))
+            {
+                leads = leads.Where(l => l.SourceType == "Procurement");
+                leads = budget switch
+                {
+                    "under5000" => leads.Where(l => l.EstimatedBudget is > 0 and <= 5000),
+                    "5000to20000" => leads.Where(l => l.EstimatedBudget is > 5000 and <= 20000),
+                    "over20000" => leads.Where(l => l.EstimatedBudget > 20000),
+                    "unknown" => leads.Where(l => !l.EstimatedBudget.HasValue),
+                    _ => leads
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(deadline))
+            {
+                leads = leads.Where(l => l.SourceType == "Procurement");
+                var zone = TimeZoneInfo.FindSystemTimeZoneById(
+                    OperatingSystem.IsWindows() ? "FLE Standard Time" : "Europe/Riga");
+                var nowInLatvia = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone);
+                leads = deadline switch
+                {
+                    "open" => leads.Where(l => l.SubmissionDeadline.HasValue && l.SubmissionDeadline.Value >= nowInLatvia),
+                    "expired" => leads.Where(l => l.SubmissionDeadline.HasValue && l.SubmissionDeadline.Value < nowInLatvia),
+                    "unknown" => leads.Where(l => !l.SubmissionDeadline.HasValue),
+                    _ => leads
+                };
+            }
 
             leads = sort switch
             {

@@ -31,6 +31,16 @@ namespace WebLeadAI.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BuyerName")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("EstimatedBudget")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SubmissionDeadline")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 

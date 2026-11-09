@@ -113,6 +113,9 @@ namespace WebLeadAI.Services
                                     "\n" + line;
                         }
 
+                        // Dublikātu gadījumā papildina tikai trūkstošus strukturētos laukus.
+                        ProcurementFields.FillMissing(existingLead, item.Description);
+                        ProcurementFields.FillMissing(existingLead, existingLead.Description);
                         continue;
                     }
 
@@ -138,6 +141,7 @@ namespace WebLeadAI.Services
                         PublishedAt = item.PublishedAt
                     };
 
+                    ProcurementFields.FillMissing(lead, item.Description);
                     _context.Leads.Add(lead);
                     knownUrls[item.Url] = lead;
 

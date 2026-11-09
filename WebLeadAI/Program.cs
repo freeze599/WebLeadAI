@@ -44,6 +44,19 @@ builder.Services.AddHttpClient<IubLeadSourceService>(client =>
 });
 
 var app = builder.Build();
+// Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
+if (args.Contains("--backfill-procurements"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var leads = await db.Leads.Where(l => l.SourceType == "Procurement").ToListAsync();
+    foreach (var lead in leads)
+        ProcurementFields.FillMissing(lead, lead.Description);
+    await db.SaveChangesAsync();
+    Console.WriteLine($"IUB metadatu pārnese pabeigta. Pārskatīti {leads.Count} iepirkumi.");
+    return;
+}
+
 if (args.Contains("--cleanup-descriptions-preview") ||
     args.Contains("--cleanup-descriptions-apply"))
 {
@@ -90,6 +103,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
-    app.Run();
+app.Run();
 
 

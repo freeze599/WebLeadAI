@@ -12,6 +12,8 @@
     string source = ViewBag.Source ?? "";
     string sort = ViewBag.Sort ?? "score";
     string age = ViewBag.Age ?? "";
+    string budget = ViewBag.Budget ?? "";
+    string deadline = ViewBag.Deadline ?? "";
 
     var sources = ViewBag.Sources as List<string>
         ?? new List<string>();
@@ -266,6 +268,26 @@
                         <option value="published" selected="@(sort == "published")">
                             Jaunākie publicētie
                         </option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">IUB budžets</label>
+                    <select name="budget" class="form-select">
+                        <option value="">Visi budžeti</option>
+                        <option value="under5000" selected="@(budget == "under5000")">Līdz 5 000 €</option>
+                        <option value="5000to20000" selected="@(budget == "5000to20000")">5 000–20 000 €</option>
+                        <option value="over20000" selected="@(budget == "over20000")">Virs 20 000 €</option>
+                        <option value="unknown" selected="@(budget == "unknown")">Budžets nav zināms</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">IUB termiņš</label>
+                    <select name="deadline" class="form-select">
+                        <option value="">Visi termiņi</option>
+                        <option value="open" selected="@(deadline == "open")">Vēl atvērts</option>
+                        <option value="expired" selected="@(deadline == "expired")">Termiņš beidzies</option>
+                        <option value="unknown" selected="@(deadline == "unknown")">Termiņš nav zināms</option>
                     </select>
                 </div>
 

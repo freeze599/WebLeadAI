@@ -35,6 +35,14 @@ builder.Services.AddScoped<
     WebLeadAI.Services.LeadDescriptionCleanupService>();
 
 
+// IUB atvērtie dati (bez API atslēgas).
+builder.Services.AddHttpClient<IubLeadSourceService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("WebLeadAI/1.0");
+    client.MaxResponseContentBufferSize = 20 * 1024 * 1024;
+});
+
 var app = builder.Build();
 if (args.Contains("--cleanup-descriptions-preview") ||
     args.Contains("--cleanup-descriptions-apply"))

@@ -270,7 +270,7 @@ namespace WebLeadAI.Services
                 "ecommerce", "online store", "online shop", "shopify", "wordpress",
                 "woocommerce", "prestashop", "joomla", "cms", "site web",
                 "site internet", "site vitrine", "boutique", "mājaslap",
-                "tīmekļa vietn", "сайт", "сайту", "сайта", "вебсайт",
+                "tīmekļa vietn", "tīmekļvietn", "mājas lap", "interneta vietn", "сайт", "сайту", "сайта", "вебсайт",
                 "магазин", "інтернет-магазин", "интернет-магазин"
             };
             string[] requestWords =
@@ -289,6 +289,8 @@ namespace WebLeadAI.Services
                 "website creation", "develop a website", "new website",
                 "création de site", "création d'un site", "créer un site",
                 "creer un site", "développement de site", "mājaslapas izstrāde",
+                "tīmekļa vietnes izstrād", "tīmekļvietnes izstrād", "mājaslapas izstrād",
+                "mājas lapas izstrād", "interneta vietnes izstrād",
                 "izveidot mājaslapu", "создание сайта", "разработка сайта",
                 "створення сайту", "розробка сайту"
             };
@@ -300,6 +302,8 @@ namespace WebLeadAI.Services
                 "correction d'erreurs", "correction de bugs", "correction de bug",
                 "mise à jour", "maintenance du site", "modernisation",
                 "mājaslapas pārveide", "labot mājaslapu", "atjaunot mājaslapu",
+                "mājaslapas uzturēšan", "mājas lapas uzturēšan", "tīmekļa vietnes uzturēšan",
+                "tīmekļvietnes uzturēšan", "vietnes pilnveidošan", "vietnes modernizāc",
                 "редизайн", "обновление", "исправление ошибок",
                 "оновлення", "підтримки", "підтримка", "виправлення помилок"
             };
@@ -321,15 +325,23 @@ namespace WebLeadAI.Services
 
             bool hasWebsite = HasAny(text, websiteWords);
             bool hasRequest = HasAny(text, requestWords);
-            bool hasBuild = HasAny(text, buildWords);
-            bool hasChanges = HasAny(text, changeWords);
+            // Latviskos virsrakstos starp vietni un darbu var būt otrs objekts.
+            // Atļauj konkrētus saistītus objektus, nevis patvaļīgu tekstu.
+            const string lvWebsiteObject = @"\b(?:mājas\s?lapas|tīmekļa vietnes|tīmekļvietnes|interneta vietnes)(?:\s+un\s+(?:vizuālās identitātes|dizaina))?\s+";
+            bool lvBuildTitle = Regex.IsMatch(heading, lvWebsiteObject + @"izstrād\p{L}*\b",
+                RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+            bool lvChangeTitle = Regex.IsMatch(heading,
+                lvWebsiteObject + @"(?:izstrād\p{L}*\s+un\s+)?(?:uzturēšan|pilnveidošan|modernizāc)\p{L}*\b",
+                RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+            bool hasBuild = HasAny(text, buildWords) || lvBuildTitle;
+            bool hasChanges = HasAny(text, changeWords) || lvChangeTitle;
             bool hasMigration = HasAny(text, migrationWords);
             bool hasCatalog = HasAny(text, catalogWords);
             bool concreteTask = hasBuild || hasChanges || hasMigration || hasCatalog;
 
             // Izņēmums: īss, bet nepārprotams uzdevums virsrakstā.
             // Viena tehnoloģijas nosaukuma vai "looking for" nepietiek.
-            bool taskInTitle = HasAny(heading, buildWords) ||
+            bool taskInTitle = lvBuildTitle || lvChangeTitle || HasAny(heading, buildWords) ||
                                HasAny(heading, changeWords) ||
                                HasAny(heading, migrationWords) ||
                                HasAny(heading, catalogWords);

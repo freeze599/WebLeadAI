@@ -10,15 +10,21 @@ namespace WebLeadAI.Services
         private readonly AppDbContext _context;
         private readonly RssLeadSourceService _rssService;
         private readonly LeadQualificationService _qualification;
+        private readonly IubLeadSourceService _iub;
+        private readonly ILogger<LeadDiscoveryService> _logger;
 
         public LeadDiscoveryService(
             AppDbContext context,
             RssLeadSourceService rssService,
-            LeadQualificationService qualification)
+            LeadQualificationService qualification,
+            IubLeadSourceService iub,
+            ILogger<LeadDiscoveryService> logger)
         {
             _context = context;
             _rssService = rssService;
             _qualification = qualification;
+            _iub = iub;
+            _logger = logger;
         }
 
         public async Task<int> DiscoverLeadsAsync()
@@ -30,6 +36,7 @@ namespace WebLeadAI.Services
         public async Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync()
         {
             var feeds = await _rssService.GetFeedResultsAsync();
+            feeds.Add(await _iub.GetFeedResultAsync());
             var report = new List<LeadSourceStatistics>();
 
             var existingLeads = await _context.Leads
@@ -61,10 +68,19 @@ namespace WebLeadAI.Services
                     if (string.IsNullOrWhiteSpace(item.Url))
                         continue;
 
-                    // Jaunais vērtēšanas algoritms 2.2
+                    // Jaunais vērtēšanas algoritms 2.3
                     var evaluation = _qualification.EvaluateV2(
                         item.Title,
                         item.Description);
+
+                    if (feed.Source == "IUB")
+                    {
+                        _logger.LogInformation(
+                            "IUB KANDIDĀTS: {Title} | Atbilstošs: {Qualified} | Prioritāte: {Score} | Pamatojums: {Reason} | Saite: {Url}",
+                            item.Title.Replace('\r', ' ').Replace('\n', ' '),
+                            evaluation.IsQualified, evaluation.Score,
+                            evaluation.Reason, item.Url);
+                    }
 
                     if (evaluation.IsQualified)
                         stats.Qualified++;
@@ -81,6 +97,20 @@ namespace WebLeadAI.Services
                             item.PublishedAt != null)
                         {
                             existingLead.PublishedAt = item.PublishedAt;
+                        }
+
+                        // Ja IUB ir publicējis paredzamo vērtību, papildina esošo ierakstu.
+                        // Nekad nepārraksta lietotāja statusu, vērtējumu vai melnrakstu.
+                        const string budgetLabel = "Paredzamā vērtība (publiskotie IUB dati): ";
+                        if (feed.Source == "IUB" &&
+                            item.Description.Contains(budgetLabel, StringComparison.Ordinal) &&
+                            !(existingLead.Description ?? "").Contains(budgetLabel, StringComparison.Ordinal))
+                        {
+                            var line = item.Description.Split('\n')
+                                .FirstOrDefault(x => x.StartsWith(budgetLabel, StringComparison.Ordinal));
+                            if (!string.IsNullOrWhiteSpace(line))
+                                existingLead.Description = (existingLead.Description ?? "").TrimEnd() +
+                                    "\n" + line;
                         }
 
                         continue;
@@ -100,7 +130,7 @@ namespace WebLeadAI.Services
                     {
                         CompanyName = title,
                         SourceUrl = item.Url,
-                        SourceType = "Advertisement",
+                        SourceType = feed.Source == "IUB" ? "Procurement" : "Advertisement",
                         Description = item.Description,
                         Status = "NeedsReview",
                         AILeadScore = evaluation.Score,

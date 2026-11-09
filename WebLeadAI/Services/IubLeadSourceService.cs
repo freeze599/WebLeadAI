@@ -86,12 +86,44 @@ public sealed class IubLeadSourceService
         var lots = matchedLots.ToList();
         // Vienai daļai tās plānotā vērtība ir tieši attiecināma uz atrasto darbu.
         // Vairāku daļu gadījumā vērtību neagregējam bez drošas deduplikācijas.
-        decimal? estimated = lots.Count == 1 ? Amount(Get(lots[0], "estimatedValue")) : null;
-        if (estimated == null && Array(Get(notice, "lots")).Count() == 1)
-            estimated = Amount(Get(notice, "totalContractValue"));
+        decimal? estimated = lots.Count == 1 ? Amount(Get(Get(lots[0], "additionalInformation"), "estimatedValue")) : null;
         if (estimated == null) return "";
         return "\nParedzamā vērtība (publiskotie IUB dati): " +
             estimated.Value.ToString("N2", CultureInfo.GetCultureInfo("lv-LV")) + " EUR";
+    }
+
+    // Diagnostika: izdrukā tikai publiskajā JSON atrodamu budžeta lauku ceļus.
+    // Lauku vērtības nelogo, lai žurnālu nepārblīvētu un neizpaustu liekus datus.
+    private void LogBudgetPaths(JsonElement notice, string title)
+    {
+        var paths = new List<string>();
+        void Walk(JsonElement node, string path, int depth)
+        {
+            if (depth > 12 || paths.Count >= 35) return;
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in node.EnumerateObject())
+                {
+                    var next = path + "." + property.Name;
+                    if (Regex.IsMatch(property.Name, "estimated|value|amount|budget|price|sum|cost", RegexOptions.IgnoreCase))
+                        paths.Add(next + " (" + property.Value.ValueKind + ")");
+                    Walk(property.Value, next, depth + 1);
+                    if (paths.Count >= 35) break;
+                }
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                int i = 0;
+                foreach (var child in node.EnumerateArray())
+                {
+                    Walk(child, path + "[" + i + "]", depth + 1);
+                    if (++i >= 8 || paths.Count >= 35) break;
+                }
+            }
+        }
+        Walk(notice, "$", 0);
+        _logger.LogWarning("IUB BUDZETA DIAGNOSTIKA: {Title} | atrastie lauki: {Paths}",
+            title, paths.Count == 0 ? "NAV; jāpārbauda vai dienas JSON vispār satur summu" : string.Join("; ", paths));
     }
 
     public async Task<RssFeedResult> GetFeedResultAsync()
@@ -180,6 +212,10 @@ public sealed class IubLeadSourceService
                         deadline.ToString("dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture));
                 }
                 if (active.Count == 0 || !usedUrls.Add(url)) continue;
+                // Ja summa nav iegūta, vienreiz izdrukā attiecīgā paziņojuma
+                // budžetam līdzīgo lauku ceļus, lai varētu salabot parseri pēc datiem.
+                if (ProcurementMetadata(notice, matchedLots).Length == 0)
+                    LogBudgetPaths(notice, title);
                 result.Items.Add(new RssLeadItem
                 {
                     Title = title, Url = url, Source = "IUB",

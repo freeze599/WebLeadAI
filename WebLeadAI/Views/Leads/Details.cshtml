@@ -5,6 +5,33 @@
     ViewData["Title"] = "Projekta detaļas";
     string displayTitle = LeadContentText.ToPlainText(Model.CompanyName);
     string displayDescription = LeadContentText.ToPlainText(Model.Description);
+    // IUB paziņojumu kopsavilkuma lauki jau atrodas Description; bez datubāzes migrācijas.
+    bool isProcurement = Model.SourceType == "Procurement";
+    string? procurementBudget = null;
+    string? procurementDeadline = null;
+    string? procurementBuyer = null;
+    if (isProcurement)
+    {
+        foreach (var line in displayDescription.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("Paredzamā vērtība", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = trimmed.IndexOf(':');
+                if (separator >= 0) procurementBudget = trimmed[(separator + 1)..].Trim();
+            }
+            else if (trimmed.StartsWith("Pieteikšanās termiņš", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = trimmed.IndexOf(':');
+                if (separator >= 0) procurementDeadline = trimmed[(separator + 1)..].Trim();
+            }
+            else if (trimmed.StartsWith("Pasūtītājs:", StringComparison.OrdinalIgnoreCase))
+            {
+                procurementBuyer = trimmed["Pasūtītājs:".Length..].Trim();
+            }
+        }
+    }
+
 
     bool frenchSource = Uri.TryCreate(Model.SourceUrl, UriKind.Absolute, out var proposalUri)
         && (proposalUri.Host.Equals("codeur.com", StringComparison.OrdinalIgnoreCase)
@@ -72,6 +99,32 @@
             </div>
 
             <hr />
+
+            @if (isProcurement)
+            {
+                <h5 class="mb-3">Iepirkuma pamatinformācija</h5>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100 bg-light">
+                            <div class="small text-muted mb-1">Paredzamā vērtība</div>
+                            <div class="fw-semibold">@(string.IsNullOrWhiteSpace(procurementBudget) ? "Nav publiskota" : procurementBudget)</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100 bg-light">
+                            <div class="small text-muted mb-1">Pieteikšanās termiņš</div>
+                            <div class="fw-semibold">@(string.IsNullOrWhiteSpace(procurementDeadline) ? "Nav norādīts" : procurementDeadline)</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100 bg-light">
+                            <div class="small text-muted mb-1">Pasūtītājs</div>
+                            <div class="fw-semibold">@(string.IsNullOrWhiteSpace(procurementBuyer) ? "Nav norādīts" : procurementBuyer)</div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-muted small">Informācija nolasīta no saglabātā IUB apraksta. Pirms pieteikšanās pārbaudi aktuālos datus EIS.</p>
+            }
 
             <h5>Projekta apraksts</h5>
 

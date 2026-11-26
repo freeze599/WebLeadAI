@@ -31,7 +31,10 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         {
             if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil) return cached;
             var result = new RssFeedResult { Source = "Freelancehunt" };
-            int omitted = 0, detailCount = 0, plus = 0, incomplete = 0;
+            int omitted = 0, detailCount = 0, plus = 0, incomplete = 0, received = 0;
+            var skipped = new Dictionary<string, int>();
+            void Skip(string reason) { omitted++; skipped[reason] = skipped.GetValueOrDefault(reason) + 1; }
+            int formatFailures = 0;
             bool limited = false;
             TimeSpan retry = TimeSpan.FromMinutes(2);
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
@@ -43,35 +46,37 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
                     if (page > 1) await Task.Delay(1100, deadline.Token);
                     using var document = await ReadAsync(Endpoint + "?page[number]=" + page, token, deadline.Token);
                     var root = document.RootElement;
-                    if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
                         throw new ImportException("API atbilde nesatur projektu sarakstu.");
                     if (data.GetArrayLength() == 0) break;
                     foreach (var summary in data.EnumerateArray())
                     {
-                        if (result.Items.Count >= MaxItems) { limited = true; break; }
+                        if (received >= MaxItems) { limited = true; break; }
+                        received++;
                         long id = Id(summary);
-                        if (id <= 0 || !seen.Add(id)) { omitted++; continue; }
+                        if (id <= 0) { Skip("nederīgs ID"); formatFailures++; continue; }
+                        if (!seen.Add(id)) { Skip("atkārtots ID API atbildē"); continue; }
                         JsonElement project = summary;
                         if (!Complete(summary))
                         {
-                            if (detailCount >= MaxDetails) { limited = true; omitted++; continue; }
+                            if (detailCount >= MaxDetails) { limited = true; Skip("sasniegts pilno aprakstu pieprasījumu limits"); continue; }
                             await Task.Delay(1100, deadline.Token);
                             detailCount++;
                             using var details = await ReadAsync(Endpoint + "/" + id, token, deadline.Token);
-                            if (!details.RootElement.TryGetProperty("data", out var detail) || Id(detail) != id)
-                            { omitted++; continue; }
+                            if (details.RootElement.ValueKind != JsonValueKind.Object || !details.RootElement.TryGetProperty("data", out var detail) || Id(detail) != id)
+                            { Skip("detaļu atbildē trūkst atbilstoša projekta"); formatFailures++; continue; }
                             project = detail.Clone();
                         }
-                        var item = ParseProject(project, DateTime.UtcNow);
-                        if (item == null) { omitted++; continue; }
+                        var item = ParseProject(project, DateTime.UtcNow, out var parseFailure);
+                        if (item == null) { Skip(parseFailure!); formatFailures++; continue; }
                         if (project.TryGetProperty("attributes", out var a) && Flag(a, "is_only_for_plus") == true) plus++;
                         else if (!item.IsCandidate) incomplete++;
                         result.Items.Add(item);
                     }
                     bool hasNext = root.TryGetProperty("links", out var links) && !string.IsNullOrWhiteSpace(Text(links, "next"));
                     // Never follow API-supplied URLs with the credential. Construct fixed-origin pages.
-                    if (hasNext && result.Items.Count >= MaxItems) limited = true;
-                    if (!hasNext || result.Items.Count >= MaxItems) break;
+                    if (hasNext && received >= MaxItems) limited = true;
+                    if (!hasNext || received >= MaxItems) break;
                     if (page == MaxPages) limited = true;
                 }
             }
@@ -79,12 +84,17 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
             catch (OperationCanceledException) { result.Error = "Freelancehunt atbildes gaidīšanas laiks pārsniegts. Saglabāti tikai līdz šim nolasītie kandidāti."; }
             catch (HttpRequestException) { result.Error = "Freelancehunt savienojums neizdevās. Mēģini vēlāk."; }
             catch (JsonException) { result.Error = "Freelancehunt atgrieza nederīgu JSON. Imports nepabeigts."; }
+            bool requestFailed = result.Error != null;
+            if (result.Error == null && formatFailures > 0)
+                result.Error = "Imports nepilnīgs: daļu API ierakstu nevarēja nolasīt. Skati izlaišanas iemeslus.";
+            else if (result.Error == null && limited)
+                result.Error = "Daļēja pārbaude: sasniegts importa limits; nav pārbaudīti visi API piedāvājumi.";
             result.FetchedAtUtc = DateTime.UtcNow;
-            result.Notice = $"API: līdz {MaxPages} lapām / {MaxItems} ierakstiem; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
-                (limited ? "Sasniegts importa limits; šī nav visa avota pārbaude. " : "") +
+            result.Notice = $"Saņemti API ieraksti: {received}; nolasīti: {result.Items.Count}; detaļu pieprasījumi: {detailCount}. API: līdz {MaxPages} lapām / {MaxItems} ierakstiem; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
+                (skipped.Count > 0 ? "Izlaisti: " + string.Join("; ", skipped.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 "Profila pieteikšanās piekļuve vēl jāpārbauda — atradumus skaties sadaļā ‘Piekļuve jāpārbauda’, avots freelancehunt.com. Pieteikumi netiek sūtīti.";
             cached = result; cachedKey = key;
-            cacheUntil = DateTime.UtcNow.Add(result.Error == null ? TimeSpan.FromMinutes(30) : retry);
+            cacheUntil = DateTime.UtcNow.Add(!requestFailed && formatFailures == 0 ? TimeSpan.FromMinutes(30) : retry);
             return result;
         }
         finally { Gate.Release(); }
@@ -120,15 +130,26 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         Flag(a, "is_only_for_plus").HasValue && a.TryGetProperty("status", out _) &&
         (!string.IsNullOrWhiteSpace(Text(a, "description")) || !string.IsNullOrWhiteSpace(Text(a, "description_html")));
 
-    public static RssLeadItem? ParseProject(JsonElement project, DateTime now)
+    public static RssLeadItem? ParseProject(JsonElement project, DateTime now) => ParseProject(project, now, out _);
+
+    private static RssLeadItem? ParseProject(JsonElement project, DateTime now, out string? failure)
     {
-        if (Id(project) <= 0 || !project.TryGetProperty("attributes", out var a) || a.ValueKind != JsonValueKind.Object) return null;
+        failure = null;
+        if (Id(project) <= 0 || !project.TryGetProperty("attributes", out var a) || a.ValueKind != JsonValueKind.Object)
+        { failure = "trūkst ID vai attributes objekta"; return null; }
         string title = LeadContentText.ToPlainText(Text(a, "name"));
         string? rawDescription = Text(a, "description");
         if (string.IsNullOrWhiteSpace(rawDescription)) rawDescription = Text(a, "description_html");
         string description = LeadContentText.ToPlainText(rawDescription);
-        string? url = project.TryGetProperty("links", out var links) ? Text(links, "web") : null;
-        if (title.Length == 0 || title.Length > 1000 || !IsProjectUrl(url)) return null;
+        string? url = null;
+        if (project.TryGetProperty("links", out var links) && links.ValueKind == JsonValueKind.Object)
+        {
+            // API 2.0 project links are nested under self; retain support for flat fixtures/older feeds.
+            if (links.TryGetProperty("self", out var self)) url = Text(self, "web");
+            if (string.IsNullOrWhiteSpace(url)) url = Text(links, "web");
+        }
+        if (title.Length == 0 || title.Length > 1000) { failure = "trūkst derīga nosaukuma"; return null; }
+        if (!IsProjectUrl(url)) { failure = "trūkst derīgas links.self.web projekta saites"; return null; }
         int status = a.TryGetProperty("status", out var statusObj) && statusObj.ValueKind == JsonValueKind.Object &&
             statusObj.TryGetProperty("id", out var s) && s.ValueKind == JsonValueKind.Number && s.TryGetInt32(out int statusId) ? statusId : 0;
         var published = Date(a, "published_at"); var expires = Date(a, "expired_at");
@@ -147,7 +168,12 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
 
     private static string? Text(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
     private static bool? Flag(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) ? v.ValueKind switch { JsonValueKind.True => true, JsonValueKind.False => false, _ => null } : null;
-    private static long Id(JsonElement e) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("id", out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long id) ? id : 0;
+    private static long Id(JsonElement e)
+    {
+        if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("id", out var v)) return 0;
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long id)) return id;
+        return v.ValueKind == JsonValueKind.String && long.TryParse(v.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out id) ? id : 0;
+    }
     private static DateTime? Date(JsonElement e, string name) => DateTimeOffset.TryParse(Text(e, name), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d.UtcDateTime : null;
     private sealed class ImportException(string message, TimeSpan? retryAfter = null) : Exception(message)
     { public TimeSpan? RetryAfter { get; } = retryAfter; }

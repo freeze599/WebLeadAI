@@ -71,6 +71,10 @@
            class="btn btn-outline-secondary">
             Vērtēšanas audits
         </a>
+        <a asp-action="RecommendationDiagnostics"
+           class="btn btn-outline-secondary">
+            Ieteikumu diagnostika
+        </a>
     </div>
 
     @if (TempData["Success"] != null)
@@ -472,6 +476,16 @@
                                 <details class="small text-muted mt-1">
                                     <summary>Pamatojums</summary>
                                     <div>@action.Explanation</div>
+                                    @if (action.ExclusionReasons.Count > 0)
+                                    {
+                                        <div class="fw-semibold mt-2">Kāpēc nav ieteikuma:</div>
+                                        <ul class="ps-3 mb-1">
+                                            @foreach (var reason in action.ExclusionReasons)
+                                            {
+                                                <li>@reason.Label — @reason.Detail</li>
+                                            }
+                                        </ul>
+                                    }
                                     @foreach (var note in action.Notes)
                                     {
                                         <div>• @note</div>
@@ -519,6 +533,12 @@
                             <td colspan="10"
                                 class="text-center text-muted py-4">
                                 Nav projektu, kas atbilst filtriem.
+                                @if (actionable == "recommended")
+                                {
+                                    <div class="mt-2">
+                                        <a asp-action="RecommendationDiagnostics">Skatīt visu projektu ieteikumu diagnostiku</a>
+                                    </div>
+                                }
                             </td>
                         </tr>
                     }

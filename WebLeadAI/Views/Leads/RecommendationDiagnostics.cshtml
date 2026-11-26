@@ -1,0 +1,185 @@
+@model WebLeadAI.Models.RecommendationDiagnosticsViewModel
+@using WebLeadAI.Services
+@{
+    ViewData["Title"] = "Ieteikumu diagnostika";
+    var zone = TimeZoneInfo.FindSystemTimeZoneById(
+        OperatingSystem.IsWindows() ? "FLE Standard Time" : "Europe/Riga");
+    var evaluatedAt = TimeZoneInfo.ConvertTimeFromUtc(Model.EvaluatedAtUtc, zone);
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h2 class="fw-bold">Ieteikumu diagnostika</h2>
+            <p class="text-muted mb-0">Kāpēc projekti neiekļūst ieteicamo klientu sarakstā?</p>
+            <div class="small text-muted">Aprēķins: @evaluatedAt.ToString("dd.MM.yyyy HH:mm") (Latvijas laiks)</div>
+        </div>
+        <a asp-action="Index" class="btn btn-outline-secondary text-nowrap">← Atpakaļ</a>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3"><div class="card bg-light border-0 h-100"><div class="card-body">
+            <div class="text-muted">Visi projekti</div><div class="h3 mb-0">@Model.TotalCount</div>
+        </div></div></div>
+        <div class="col-6 col-md-3"><div class="card bg-light border-0 h-100"><div class="card-body">
+            <div class="text-muted">Ieteicamie klienti</div><div class="h3 text-success mb-0">@Model.RecommendedCount</div>
+        </div></div></div>
+        <div class="col-6 col-md-3"><div class="card bg-light border-0 h-100"><div class="card-body">
+            <div class="text-muted">Jāpārbauda / jau uzrunāti</div><div class="h3 mb-0">@Model.ReviewCount</div>
+        </div></div></div>
+        <div class="col-6 col-md-3"><div class="card bg-light border-0 h-100"><div class="card-body">
+            <div class="text-muted">Nav ieteicams</div><div class="h3 text-secondary mb-0">@Model.SkippedCount</div>
+        </div></div></div>
+    </div>
+
+    @if (Model.TotalCount == 0)
+    {
+        <div class="alert alert-info">Datubāzē vēl nav projektu. Sāc ar “Meklēt jaunus klientus” projektu sarakstā.</div>
+    }
+    else if (Model.RecommendedCount == 0)
+    {
+        <div class="alert alert-info">
+            Neviens no @Model.TotalCount projektiem pašlaik neizpilda visus ieteikuma nosacījumus.
+            Zemāk redzami konkrētie iemesli. Tas pats par sevi nenozīmē, ka meklēšana nedarbojas.
+        </div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5>Galvenie izslēgšanas iemesli</h5>
+            <p class="small text-muted">
+                Kopsavilkums aptver visus @Model.TotalCount saglabātos projektus neatkarīgi no projektu saraksta filtriem.
+                Katrs neieteiktais projekts šeit skaitīts vienu reizi — pie pirmā neizpildītā nosacījuma.
+                Ja šķēršļu ir vairāki, tie visi redzami projekta rindā.
+            </p>
+            @if (Model.Reasons.Count > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-2">
+                        <thead><tr><th scope="col">Galvenais iemesls</th><th scope="col" class="text-end">Projekti</th></tr></thead>
+                        <tbody>
+                            @foreach (var reason in Model.Reasons)
+                            {
+                                <tr>
+                                    <td><a asp-action="RecommendationDiagnostics" asp-route-reason="@reason.Code">@reason.Label</a></td>
+                                    <td class="text-end">@reason.Count</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot><tr><th scope="row">Kopā nav ieteikuma</th><td class="text-end fw-bold">@(Model.TotalCount - Model.RecommendedCount)</td></tr></tfoot>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <p class="mb-2">Izslēgšanas iemeslu nav.</p>
+            }
+            <details class="small mt-3">
+                <summary>Pašreizējie ieteikuma nosacījumi</summary>
+                <ul class="mt-2 mb-2">
+                    <li>Projekts nav noraidīts vai jau uzrunāts.</li>
+                    <li>Saglabātā prioritāte ir vismaz @ActionabilityService.MinimumRecommendedScore/100.</li>
+                    <li>Solo piemērotība ir “Iespējams piemērots”.</li>
+                    <li>Tas nav valsts iepirkums — iepirkumiem paredzēta manuāla pārbaude.</li>
+                    <li>Zināmais publicēšanas datums nav vecāks par @ActionabilityService.MaximumAgeDays dienām.</li>
+                </ul>
+                <p class="text-muted mb-0">
+                    Nezināms publicēšanas datums pašreizējā filtrā ir tikai piezīme, nevis izslēgšanas iemesls.
+                    Franču valodas pazīmes ieteikumu nebloķē — saziņai vari izmantot tulkošanas palīdzību.
+                    Valodas prasības vēl jāprecizē. Ieteikums vēl neapliecina klienta pieejamību.
+                </p>
+            </details>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3">
+            <form asp-action="RecommendationDiagnostics" method="get" class="row g-2 align-items-end">
+                <div class="col-md-7">
+                    <label for="reason" class="form-label">Galvenais iemesls</label>
+                    <select id="reason" name="reason" class="form-select">
+                        <option value="">Visi projekti</option>
+                        <option value="recommended" selected="@(Model.Reason == "recommended")">Ieteicamie klienti (@Model.RecommendedCount)</option>
+                        @foreach (var reason in Model.Reasons)
+                        {
+                            <option value="@reason.Code" selected="@(Model.Reason == reason.Code)">@reason.Label (@reason.Count)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-5 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Filtrēt</button>
+                    <a asp-action="RecommendationDiagnostics" class="btn btn-outline-secondary">Notīrīt</a>
+                </div>
+            </form>
+            <div class="small text-muted mt-3">Redzami: @Model.Items.Count no @Model.TotalCount</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th scope="col">Projekts</th><th scope="col">Prioritāte</th>
+                    <th scope="col">Uzrunāšana</th><th scope="col">Kāpēc nav ieteikuma</th>
+                    <th scope="col">Darbība</th>
+                </tr></thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        var lead = item.Lead;
+                        var action = item.Assessment;
+                        var primary = action.PrimaryExclusion;
+                        var source = Uri.TryCreate(lead.SourceUrl, UriKind.Absolute, out var uri)
+                            ? uri.Host : "Manuāls ieraksts";
+                        <tr>
+                            <td style="min-width:180px; max-width:320px; overflow-wrap:anywhere;">
+                                <strong>@LeadContentText.ToPlainText(lead.CompanyName)</strong>
+                                <div class="small text-muted mt-1">@source · @lead.Status</div>
+                            </td>
+                            <td class="text-nowrap">@lead.AILeadScore / 100</td>
+                            <td><span class="badge bg-@action.CssClass">@action.Label</span></td>
+                            <td style="min-width:260px; max-width:520px; overflow-wrap:anywhere;">
+                                @if (primary != null)
+                                {
+                                    <strong>@primary.Label</strong>
+                                    <div class="small">@primary.Detail</div>
+                                    @if (action.ExclusionReasons.Count > 1)
+                                    {
+                                        <details class="small mt-2">
+                                            <summary>Papildu iemesli (@(action.ExclusionReasons.Count - 1))</summary>
+                                            <ul class="ps-3 mt-1 mb-0">
+                                                @foreach (var extra in action.ExclusionReasons.Skip(1))
+                                                {
+                                                    <li class="mb-1"><strong>@extra.Label:</strong> @extra.Detail</li>
+                                                }
+                                            </ul>
+                                        </details>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="text-success">Visi ieteikuma nosacījumi izpildīti.</div>
+                                    <div class="small">@action.Explanation</div>
+                                }
+                                @if (action.Notes.Count > 0)
+                                {
+                                    <details class="small text-muted mt-2">
+                                        <summary>Pārbaudes piezīmes</summary>
+                                        <ul class="ps-3 mt-1 mb-0">
+                                            @foreach (var note in action.Notes)
+                                            {
+                                                <li>@note</li>
+                                            }
+                                        </ul>
+                                    </details>
+                                }
+                            </td>
+                            <td><a asp-action="Details" asp-route-id="@lead.Id" class="btn btn-sm btn-outline-primary">Apskatīt</a></td>
+                        </tr>
+                    }
+                    @if (Model.Items.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-4">Šim filtram projektu nav.</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

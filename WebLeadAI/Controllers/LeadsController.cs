@@ -223,6 +223,13 @@ namespace WebLeadAI.Controllers
             _ => "review"
         };
 
+        [HttpGet]
+        public async Task<IActionResult> RecommendationDiagnostics(string? reason)
+        {
+            var leads = await _context.Leads.AsNoTracking().ToListAsync();
+            return View(RecommendationDiagnosticsViewModel.Create(leads, DateTime.UtcNow, reason));
+        }
+
         private static int SoloRank(string level) => SoloCategory(level) switch
         {
             "possible" => 0,

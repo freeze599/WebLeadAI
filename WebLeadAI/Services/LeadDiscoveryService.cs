@@ -12,6 +12,7 @@ namespace WebLeadAI.Services
         private readonly LeadQualificationService _qualification;
         private readonly IubLeadSourceService _iub;
         private readonly JobicyLeadSourceService _jobicy;
+        private readonly FreelancehuntLeadSourceService _freelancehunt;
         private readonly ILogger<LeadDiscoveryService> _logger;
 
         public LeadDiscoveryService(
@@ -20,6 +21,7 @@ namespace WebLeadAI.Services
             LeadQualificationService qualification,
             IubLeadSourceService iub,
             JobicyLeadSourceService jobicy,
+            FreelancehuntLeadSourceService freelancehunt,
             ILogger<LeadDiscoveryService> logger)
         {
             _context = context;
@@ -27,6 +29,7 @@ namespace WebLeadAI.Services
             _qualification = qualification;
             _iub = iub;
             _jobicy = jobicy;
+            _freelancehunt = freelancehunt;
             _logger = logger;
         }
 
@@ -41,6 +44,7 @@ namespace WebLeadAI.Services
             var feeds = (await _rssService.GetFeedResultsAsync()).ToList();
             feeds.Add(await _iub.GetFeedResultAsync());
             feeds.Add(await _jobicy.GetFeedResultAsync());
+            feeds.Add(await _freelancehunt.GetFeedResultAsync());
             var report = new List<LeadSourceStatistics>();
 
             var existingLeads = await _context.Leads

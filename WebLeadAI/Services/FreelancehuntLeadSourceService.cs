@@ -1,0 +1,154 @@
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace WebLeadAI.Services;
+
+// Read-only API integration: no bids, messages or account changes.
+public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfiguration configuration)
+{
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static RssFeedResult? cached;
+    private static string? cachedKey;
+    private static DateTime cacheUntil;
+    private const int MaxPages = 5, MaxItems = 250, MaxDetails = 20;
+    private const string Endpoint = "https://api.freelancehunt.com/v2/projects";
+
+    public async Task<RssFeedResult> GetFeedResultAsync()
+    {
+        string token = configuration["Freelancehunt:ApiToken"]?.Trim() ?? "";
+        if (token.Length == 0)
+            return new() { Source = "Freelancehunt", Error = "Nav iestatīta Freelancehunt:ApiToken atslēga. Pārbaudi Manage User Secrets un Development palaišanas vidi." };
+        if (token.Length > 4096 || token.Any(char.IsWhiteSpace))
+            return new() { Source = "Freelancehunt", Error = "API atslēgas formāts nav derīgs. Ievieto tikai atslēgu, bez Bearer prefiksa." };
+        string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+        await Gate.WaitAsync();
+        try
+        {
+            if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil) return cached;
+            var result = new RssFeedResult { Source = "Freelancehunt" };
+            int omitted = 0, detailCount = 0, plus = 0, incomplete = 0;
+            bool limited = false;
+            TimeSpan retry = TimeSpan.FromMinutes(2);
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+            var seen = new HashSet<long>();
+            try
+            {
+                for (int page = 1; page <= MaxPages; page++)
+                {
+                    if (page > 1) await Task.Delay(1100, deadline.Token);
+                    using var document = await ReadAsync(Endpoint + "?page[number]=" + page, token, deadline.Token);
+                    var root = document.RootElement;
+                    if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                        throw new ImportException("API atbilde nesatur projektu sarakstu.");
+                    if (data.GetArrayLength() == 0) break;
+                    foreach (var summary in data.EnumerateArray())
+                    {
+                        if (result.Items.Count >= MaxItems) { limited = true; break; }
+                        long id = Id(summary);
+                        if (id <= 0 || !seen.Add(id)) { omitted++; continue; }
+                        JsonElement project = summary;
+                        if (!Complete(summary))
+                        {
+                            if (detailCount >= MaxDetails) { limited = true; omitted++; continue; }
+                            await Task.Delay(1100, deadline.Token);
+                            detailCount++;
+                            using var details = await ReadAsync(Endpoint + "/" + id, token, deadline.Token);
+                            if (!details.RootElement.TryGetProperty("data", out var detail) || Id(detail) != id)
+                            { omitted++; continue; }
+                            project = detail.Clone();
+                        }
+                        var item = ParseProject(project, DateTime.UtcNow);
+                        if (item == null) { omitted++; continue; }
+                        if (project.TryGetProperty("attributes", out var a) && Flag(a, "is_only_for_plus") == true) plus++;
+                        else if (!item.IsCandidate) incomplete++;
+                        result.Items.Add(item);
+                    }
+                    bool hasNext = root.TryGetProperty("links", out var links) && !string.IsNullOrWhiteSpace(Text(links, "next"));
+                    // Never follow API-supplied URLs with the credential. Construct fixed-origin pages.
+                    if (hasNext && result.Items.Count >= MaxItems) limited = true;
+                    if (!hasNext || result.Items.Count >= MaxItems) break;
+                    if (page == MaxPages) limited = true;
+                }
+            }
+            catch (ImportException ex) { result.Error = ex.Message; retry = ex.RetryAfter ?? retry; }
+            catch (OperationCanceledException) { result.Error = "Freelancehunt atbildes gaidīšanas laiks pārsniegts. Saglabāti tikai līdz šim nolasītie kandidāti."; }
+            catch (HttpRequestException) { result.Error = "Freelancehunt savienojums neizdevās. Mēģini vēlāk."; }
+            catch (JsonException) { result.Error = "Freelancehunt atgrieza nederīgu JSON. Imports nepabeigts."; }
+            result.FetchedAtUtc = DateTime.UtcNow;
+            result.Notice = $"API: līdz {MaxPages} lapām / {MaxItems} ierakstiem; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
+                (limited ? "Sasniegts importa limits; šī nav visa avota pārbaude. " : "") +
+                "Profila pieteikšanās piekļuve vēl jāpārbauda — atradumus skaties sadaļā ‘Piekļuve jāpārbauda’, avots freelancehunt.com. Pieteikumi netiek sūtīti.";
+            cached = result; cachedKey = key;
+            cacheUntil = DateTime.UtcNow.Add(result.Error == null ? TimeSpan.FromMinutes(30) : retry);
+            return result;
+        }
+        finally { Gate.Release(); }
+    }
+
+    private async Task<JsonDocument> ReadAsync(string url, string token, CancellationToken cancellation)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.AcceptLanguage.ParseAdd("en");
+        using var response = await client.SendAsync(request, cancellation);
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            var delay = response.Headers.RetryAfter?.Delta ??
+                (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromMinutes(30);
+            throw new ImportException("Freelancehunt pieprasījumu limits sasniegts. Imports uz laiku apturēts.", delay > TimeSpan.FromMinutes(2) ? delay : TimeSpan.FromMinutes(2));
+        }
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new ImportException("Freelancehunt noraidīja API atslēgu (401). Pārbaudi lokāli saglabāto atslēgu.");
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+            throw new ImportException("Freelancehunt piekļuve liegta (403). Pārbaudi konta/API piekļuvi; nepērc abonementu automātiski.");
+        if (!response.IsSuccessStatusCode)
+            throw new ImportException($"Freelancehunt atbildēja ar HTTP {(int)response.StatusCode}. Imports nepabeigts.");
+        // Never log the credential or server response body.
+        string media = response.Content.Headers.ContentType?.MediaType ?? "";
+        if (!media.Contains("json", StringComparison.OrdinalIgnoreCase))
+            throw new ImportException("Freelancehunt atgrieza lapu JSON vietā. Pārbaudi API piekļuvi.");
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+    }
+
+    private static bool Complete(JsonElement p) => p.TryGetProperty("attributes", out var a) &&
+        Flag(a, "is_only_for_plus").HasValue && a.TryGetProperty("status", out _) &&
+        (!string.IsNullOrWhiteSpace(Text(a, "description")) || !string.IsNullOrWhiteSpace(Text(a, "description_html")));
+
+    public static RssLeadItem? ParseProject(JsonElement project, DateTime now)
+    {
+        if (Id(project) <= 0 || !project.TryGetProperty("attributes", out var a) || a.ValueKind != JsonValueKind.Object) return null;
+        string title = LeadContentText.ToPlainText(Text(a, "name"));
+        string? rawDescription = Text(a, "description");
+        if (string.IsNullOrWhiteSpace(rawDescription)) rawDescription = Text(a, "description_html");
+        string description = LeadContentText.ToPlainText(rawDescription);
+        string? url = project.TryGetProperty("links", out var links) ? Text(links, "web") : null;
+        if (title.Length == 0 || title.Length > 1000 || !IsProjectUrl(url)) return null;
+        int status = a.TryGetProperty("status", out var statusObj) && statusObj.ValueKind == JsonValueKind.Object &&
+            statusObj.TryGetProperty("id", out var s) && s.ValueKind == JsonValueKind.Number && s.TryGetInt32(out int statusId) ? statusId : 0;
+        var published = Date(a, "published_at"); var expires = Date(a, "expired_at");
+        bool candidate = status == 11 && Flag(a, "is_only_for_plus") == false && Flag(a, "is_personal") != true &&
+            description.Length is >= 30 and <= 60000 &&
+            published.HasValue && published <= now.AddMinutes(5) && published >= now.AddDays(-30) &&
+            expires.HasValue && expires > now;
+        return new RssLeadItem { Title = title, Description = description, Url = url!, Source = "Freelancehunt",
+            SourceType = "Advertisement", PublishedAt = published, IsCandidate = candidate };
+    }
+
+    public static bool IsProjectUrl(string? url) => Uri.TryCreate(url, UriKind.Absolute, out var u) &&
+        u.Scheme == "https" && u.IdnHost.Equals("freelancehunt.com", StringComparison.OrdinalIgnoreCase) &&
+        u.IsDefaultPort && u.UserInfo.Length == 0 && u.Query.Length == 0 && u.Fragment.Length == 0 &&
+        Regex.IsMatch(u.AbsolutePath, @"^/(?:en/|ua/|ru/)?project/[^/]+/[0-9]+\.html$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    private static string? Text(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+    private static bool? Flag(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) ? v.ValueKind switch { JsonValueKind.True => true, JsonValueKind.False => false, _ => null } : null;
+    private static long Id(JsonElement e) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("id", out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out long id) ? id : 0;
+    private static DateTime? Date(JsonElement e, string name) => DateTimeOffset.TryParse(Text(e, name), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var d) ? d.UtcDateTime : null;
+    private sealed class ImportException(string message, TimeSpan? retryAfter = null) : Exception(message)
+    { public TimeSpan? RetryAfter { get; } = retryAfter; }
+}

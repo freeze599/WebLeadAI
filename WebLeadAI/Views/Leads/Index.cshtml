@@ -16,7 +16,7 @@
     string deadline = ViewBag.Deadline ?? "";
     string soloFit = ViewBag.SoloFit ?? "";
     string actionable = ViewBag.Actionable ?? "";
-    string access = ViewBag.Access ?? "";
+    string access = ViewBag.Access ?? "free";
     string kind = ViewBag.Kind ?? "";
 
     var sources = ViewBag.Sources as List<string>
@@ -40,7 +40,7 @@
         </div>
 
         <span class="badge bg-primary fs-6">
-            Kopā: @ViewBag.TotalCount
+            Datubāzē: @ViewBag.TotalCount
         </span>
     </div>
 
@@ -82,10 +82,10 @@
     </div>
 
     <div class="alert alert-info">
-        Automātiskā meklēšana: <strong>SS.com, IUB un Jobicy</strong>. SS.com rezultāti tiek atkārtoti izmantoti 30 minūtes;
+        Automātiskā meklēšana: <strong>SS.com, IUB, Jobicy un Freelancehunt</strong>. SS.com rezultāti tiek atkārtoti izmantoti 30 minūtes;
         pārbauda līdz 20 jaunākajiem programmētāju sludinājumiem. Jobicy meklē līgumdarbus/nepilnu slodzi (līdz 500 inženierijas piedāvājumiem, 30 minūšu kešatmiņa). Hubstaff, Truelancer un Ukrainas avoti pieejami
         sadaļā <a asp-action="Sources">Meklēšanas avoti</a> manuālai pārbaudei.
-        Maksas platformu vecie ieraksti saglabāti, bet bezmaksas ieteikumos neiekļūst.
+        Freelancehunt nepieciešama lokālā API atslēga; atradumi sākumā redzami skatā <a asp-action="Index" asp-route-access="unknown" asp-route-source="freelancehunt.com">Piekļuve jāpārbauda — Freelancehunt</a>. Maksas platformu vecie ieraksti saglabāti atsevišķā skatā; noklusējuma sarakstā tie netiek rādīti.
     </div>
     @if (TempData["Success"] != null)
     {
@@ -127,7 +127,7 @@
                                 <td>
                                     @if (stat.Error != null)
                                     {
-                                        <span class="badge bg-danger" title="@stat.Error">Kļūda</span>
+                                        <span class="badge bg-danger">Kļūda</span><div class="small text-danger mt-1">@stat.Error</div>
                                     }
                                     else
                                     {
@@ -245,7 +245,7 @@
                 <div class="col-md-3">
                     <label class="form-label">Pieteikšanās izmaksas</label>
                     <select name="access" class="form-select">
-                        <option value="">Visi, arī vēsturiskie</option>
+                        <option value="all" selected="@(access == "all")">Visi, arī vēsturiskie</option>
                         <option value="free" selected="@(access == "free")">Bez priekšapmaksas / bezmaksas limits</option>
                         <option value="paid" selected="@(access == "paid")">Jāmaksā pirms darba</option>
                         <option value="unknown" selected="@(access == "unknown")">Piekļuve jāpārbauda</option>
@@ -388,11 +388,26 @@
         </div>
     </div>
 
+    <div class="mb-3">
+        <div class="d-flex gap-2 flex-wrap" aria-label="Pieteikšanās piekļuves skati">
+            <a asp-action="Index" asp-route-access="free" class="btn @(access == "free" ? "btn-primary" : "btn-outline-primary")">Bez priekšapmaksas (@ViewBag.FreeCount)</a>
+            <a asp-action="Index" asp-route-access="paid" class="btn @(access == "paid" ? "btn-secondary" : "btn-outline-secondary")">Maksas avotu ieraksti (@ViewBag.PaidCount)</a>
+            <a asp-action="Index" asp-route-access="unknown" class="btn @(access == "unknown" ? "btn-secondary" : "btn-outline-secondary")">Piekļuve jāpārbauda (@ViewBag.UnknownCount)</a>
+            <a asp-action="Index" asp-route-access="all" class="btn @(access == "all" ? "btn-secondary" : "btn-outline-secondary")">Visi saglabātie (@ViewBag.TotalCount)</a>
+        </div>
+        <div class="small text-muted mt-2">Skatu skaitļi un augšējās statusu kartītes aptver visu datubāzi. Pārslēdzot skatu, pārējie filtri tiek notīrīti. Nekas netiek dzēsts; melnraksti un uzrunāšanas vēsture saglabājas.</div>
+    </div>
+
     <div class="card shadow-sm">
 
         <div class="card-header bg-white py-3
             d-flex justify-content-between">
-            <h5 class="mb-0">Projektu saraksts</h5>
+            <h5 class="mb-0">@(access switch {
+                "free" => "Piedāvājumi bez priekšapmaksas",
+                "paid" => "Maksas avotu ieraksti",
+                "unknown" => "Ieraksti ar nepārbaudītu piekļuvi",
+                _ => "Visi saglabātie projekti"
+            })</h5>
 
             <span class="text-muted">
                 Atrasti: @leads.Count
@@ -565,7 +580,17 @@
                         <tr>
                             <td colspan="10"
                                 class="text-center text-muted py-4">
-                                Nav projektu, kas atbilst filtriem.
+                                @if (access == "free" && (int)ViewBag.FreeCount == 0)
+                                {
+                                    <strong>Vēl nav saglabātu piedāvājumu ar pieteikšanos bez priekšapmaksas.</strong>
+                                    <div class="mt-2">Vecie maksas un nepārbaudīto avotu ieraksti nav pazuduši — tie pieejami augstāk norādītajos skatos. Ja meklēšanā pievienoti 0 projekti, jaunajā skatā nebūs jaunu piedāvājumu.</div>
+                                    <a asp-action="Sources" class="btn btn-outline-primary mt-2">Apskatīt meklēšanas avotus</a>
+                                }
+                                else
+                                {
+                                    <span>Šajā piekļuves skatā nav projektu, kas atbilst izvēlētajiem filtriem.</span>
+                                    <a asp-action="Index" asp-route-access="@access">Notīrīt pārējos filtrus</a>
+                                }
                                 @if (actionable == "recommended")
                                 {
                                     <div class="mt-2">

@@ -45,6 +45,11 @@ namespace WebLeadAI.Controllers
                 .AsNoTracking()
                 .ToListAsync();
 
+            // Missing, blank or invalid values return to the default free-access view.
+            access = access is "all" or "paid" or "unknown" or "free" ? access : "free";
+            ViewBag.FreeCount = allLeads.Count(l => SourceAccessService.Evaluate(l).NoUpfrontPayment);
+            ViewBag.PaidCount = allLeads.Count(l => SourceAccessService.Evaluate(l).Code == "paid");
+            ViewBag.UnknownCount = allLeads.Count(l => SourceAccessService.Evaluate(l).Code == "unknown");
             ViewBag.TotalCount = allLeads.Count;
             ViewBag.ReviewCount = allLeads.Count(l =>
                 l.Status == "NeedsReview" || l.Status == "New");

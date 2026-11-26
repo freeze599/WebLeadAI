@@ -52,6 +52,14 @@ builder.Services.AddHttpClient<JobicyLeadSourceService>(client =>
     client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
+builder.Services.AddHttpClient<FreelancehuntLeadSourceService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.MaxResponseContentBufferSize = 5 * 1024 * 1024;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("WebLeadAI/1.0");
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+  .RedactLoggedHeaders(new[] { "Authorization" });
+
 var app = builder.Build();
 // Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
 if (args.Contains("--backfill-procurements"))

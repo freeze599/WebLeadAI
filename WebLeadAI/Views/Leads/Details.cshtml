@@ -6,6 +6,7 @@
     string displayTitle = LeadContentText.ToPlainText(Model.CompanyName);
     string displayDescription = LeadContentText.ToPlainText(Model.Description);
     var soloFit = SoloFitService.Evaluate(Model);
+    var sourceAccess = SourceAccessService.Evaluate(Model);
     // IUB paziņojumu kopsavilkuma lauki jau atrodas Description; bez datubāzes migrācijas.
     bool isProcurement = Model.SourceType == "Procurement";
     string? procurementBudget = null;
@@ -75,6 +76,15 @@
         </a>
     </div>
 
+    @if (Model.SourceType == JobicyLeadSourceService.ContractType)
+    {
+        <div class="alert alert-info"><strong>Līgumdarbs / nepilna slodze.</strong> Tas nav atsevišķs klienta pasūtījums.
+        Pārbaudi darba stundas, pieredzes un atrašanās vietas nosacījumus. Avots: <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a>.</div>
+    }
+    <div class="alert alert-@sourceAccess.CssClass">
+        <strong>@sourceAccess.Label.</strong> @sourceAccess.Detail
+        <a asp-action="Sources">Avotu nosacījumi</a>
+    </div>
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success">

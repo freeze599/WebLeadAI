@@ -1,0 +1,39 @@
+@using WebLeadAI.Services
+@{ ViewData["Title"] = "Meklēšanas avoti"; }
+<div class="container py-4">
+    <div class="d-flex justify-content-between mb-3">
+        <h2>Meklēšanas avoti</h2><a asp-action="Index" class="btn btn-outline-secondary">← Atpakaļ</a>
+    </div>
+    <p>Mērķis: pieteikties bez obligāta abonementa, depozīta vai kontaktu atbloķēšanas maksas. Komisija pēc iegūta darba der.</p>
+    <div class="alert alert-info">
+        <strong>Automātiski meklē SS.com, IUB un Jobicy.</strong> Pārējiem avotiem zemāk ir saites manuālai meklēšanai un precīzs pieslēguma statuss.
+        Pēc atrasta pasūtījuma vari izmantot <a asp-action="Create">Pievienot klientu</a> un saglabāt oriģinālo sludinājuma saiti.
+        Saites atvēršana neko nenosūta un neiegādājas.
+    </div>
+    <p class="text-muted">Nosacījumu pārbaude: 26.11.2026. Platformu noteikumi var mainīties. Bezmaksas piekļuve negarantē konkrētā darba pieejamību vai piemērotību.</p>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead><tr><th>Avots / reģions</th><th>Piedāvājuma veids</th><th>Pieteikšanās</th><th>Meklēšanas statuss</th><th>Darbība</th></tr></thead>
+            <tbody>
+                @foreach (var source in SourceAccessService.Sources)
+                {
+                    <tr>
+                        <td><strong>@source.Name</strong><div class="small">@source.Region</div></td>
+                        <td>@source.Kind</td>
+                        <td style="min-width:220px"><span class="badge bg-@source.Access.CssClass">@source.Access.Label</span><div class="small mt-2">@source.Access.Detail</div></td>
+                        <td style="min-width:220px">@source.Import</td>
+                        <td><a href="@source.Url" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">Atvērt avotu ↗</a>
+                            <a href="@source.Evidence" target="_blank" rel="noopener noreferrer" class="d-block small mt-2">Pārbaudes saite ↗</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="card p-3 mt-3">
+        <h5>Ko meklēt</h5>
+        <p><strong>LV:</strong> vajadzīga mājaslapa, meklēju izstrādātāju, mājaslapas pārveide, e-veikals, gabaldarbs.</p>
+        <p><strong>UA:</strong> потрібен сайт, шукаю розробника, доробка сайту, інтернет-магазин, проєктна робота.</p>
+        <p class="mb-0"><strong>EN:</strong> website development, website redesign, ASP.NET, C#, freelance, contract, part-time.
+        Izstrādātāju reklāmas un pilnas slodzes vakances nodali no klientu pasūtījumiem.</p>
+    </div>
+</div>

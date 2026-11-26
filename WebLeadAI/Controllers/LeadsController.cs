@@ -22,6 +22,12 @@ namespace WebLeadAI.Controllers
         }
 
         [HttpGet]
+        public IActionResult Sources() => View();
+
+        [HttpGet]
+        public IActionResult JobicyDiagnostics(string? reason) => View(JobicyLeadSourceService.GetDiagnostics(reason));
+
+        [HttpGet]
         public async Task<IActionResult> Index(
             string? search,
             string? status,
@@ -31,7 +37,9 @@ namespace WebLeadAI.Controllers
             string? budget,
             string? deadline,
             string? soloFit,
-            string? actionable)
+            string? actionable,
+            string? access,
+            string? kind)
         {
             var allLeads = await _context.Leads
                 .AsNoTracking()
@@ -60,8 +68,20 @@ namespace WebLeadAI.Controllers
             ViewBag.Deadline = deadline ?? "";
             ViewBag.SoloFit = soloFit ?? "";
             ViewBag.Actionable = actionable ?? "";
+            ViewBag.Access = access ?? "";
+            ViewBag.Kind = kind ?? "";
 
             IEnumerable<Lead> leads = allLeads;
+            leads = kind switch
+            {
+                "contract" => leads.Where(l => l.SourceType == JobicyLeadSourceService.ContractType),
+                "procurement" => leads.Where(l => l.SourceType == "Procurement"),
+                "project" => leads.Where(l => l.SourceType != JobicyLeadSourceService.ContractType && l.SourceType != "Procurement"),
+                _ => leads
+            };
+            if (access is "free" or "paid" or "unknown")
+                leads = leads.Where(l => access == "free" ? SourceAccessService.Evaluate(l).NoUpfrontPayment
+                    : SourceAccessService.Evaluate(l).Code == access);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -419,7 +439,7 @@ namespace WebLeadAI.Controllers
             {
                 var result = qualification.EvaluateV2(
                     lead.CompanyName,
-                    lead.Description ?? "");
+                    lead.Description ?? "", lead.SourceType);
 
                 lead.AILeadScore = result.Score;
             }
@@ -503,7 +523,7 @@ namespace WebLeadAI.Controllers
                 // Jaunais algoritms 2.3
                 var evaluationV2 = qualification.EvaluateV2(
                     lead.CompanyName,
-                    lead.Description ?? "");
+                    lead.Description ?? "", lead.SourceType);
 
                 return new LeadAuditItem
                 {

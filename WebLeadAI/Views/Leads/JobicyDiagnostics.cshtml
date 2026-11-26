@@ -1,0 +1,81 @@
+@model WebLeadAI.Models.JobicyDiagnosticsViewModel
+@{
+    ViewData["Title"] = "Jobicy atlases diagnostika";
+}
+<div class="container py-4">
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <h2>Jobicy atlases diagnostika</h2>
+        <a asp-action="Index" class="btn btn-outline-secondary">← Atpakaļ</a>
+    </div>
+    <p>Kāpēc nolasītie piedāvājumi neiziet importa atlasi? Šeit apskatāmi arī piedāvājumi, kuri netika saglabāti projektu datubāzē.</p>
+    @if (!Model.HasSnapshot)
+    {
+        <div class="alert alert-info">Šajā lietotnes palaišanas reizē Jobicy vēl nav pārbaudīts. Atgriezies projektu sarakstā un nospied “Meklēt jaunus klientus”. Pēc lietotnes restartēšanas šis pārskats jāiegūst no jauna.</div>
+    }
+    else
+    {
+        <p class="text-muted">Pēdējais šajā lietotnes procesā iegūtais rezultāts: @(Model.FetchedAtUtc?.ToString("dd.MM.yyyy HH:mm")) UTC.
+            Tas var būt koplietots vai izmantots no kešatmiņas. Šīs lapas atvēršana neveic jaunu meklēšanu un nemaina datubāzi.</p>
+        @if (Model.Error != null) { <div class="alert alert-warning"><strong>Rezultāts var būt nepilnīgs.</strong> @Model.Error</div> }
+        @if (Model.Notice != null) { <div class="alert alert-info">@Model.Notice</div> }
+        <div class="row g-3 mb-4">
+            <div class="col-md-4"><div class="card p-3">Nolasīti derīgi ieraksti<strong class="fs-3">@Model.Read</strong></div></div>
+            <div class="col-md-4"><div class="card p-3">Iziet importa atlasi<strong class="fs-3 text-success">@Model.Eligible</strong></div></div>
+            <div class="col-md-4"><div class="card p-3">Neiziet importa atlasi<strong class="fs-3">@Model.Rejected</strong></div></div>
+        </div>
+        <div class="card p-3 mb-4">
+            <h4>Izslēgšanas iemesli</h4>
+            <p>“Galvenais iemesls” skaita katru izslēgto ierakstu vienreiz: darba veids → loma → reģions → datums → apraksts.
+                “Visi gadījumi” ietver arī papildu šķēršļus, tāpēc šīs kolonnas skaitļus nedrīkst summēt kā projektu skaitu.</p>
+            <div class="table-responsive"><table class="table">
+                <thead><tr><th>Iemesls</th><th>Galvenais iemesls</th><th>Visi gadījumi</th></tr></thead>
+                <tbody>
+                    @foreach (var reason in Model.Reasons)
+                    {
+                        <tr><td><a asp-action="JobicyDiagnostics" asp-route-reason="@reason.Code">@reason.Label</a></td><td>@reason.PrimaryCount</td><td>@reason.AnyCount</td></tr>
+                    }
+                </tbody>
+                <tfoot><tr><th>Kopā izslēgti</th><th>@Model.Rejected</th><td>Skaitļi pārklājas</td></tr></tfoot>
+            </table></div>
+            @if (Model.Read == 0) { <p>Nav ierakstu, kurus šajā rezultātā analizēt. Pārbaudi arī kļūdas paziņojumu, ja tāds redzams.</p> }
+            <details><summary>Pašreizējie atlases nosacījumi</summary>
+                <ul class="mt-2">
+                    <li>Contract, Freelance vai Part-Time; Full-Time tiek izslēgts arī tad, ja norādīts kopā ar Contract.</li>
+                    <li>Tīmekļa izstrādes loma vai izstrādātāja/inženiera loma ar .NET/C# pazīmēm aprakstā. Tā ir atslēgvārdu atpazīšana, kas var kļūdīties.</li>
+                    <li>Reģiona norādē: Latvia, Europe, European Union, EU, EMEA, Anywhere, Worldwide vai Global. Cits formulējums tiek izslēgts, bet tas pats par sevi nepierāda, ka no Latvijas pieteikties nevar.</li>
+                    <li>Atpazīts datums pēdējās 30 dienās; nākotnes datumiem pieļauj tikai 5 minūšu novirzi. Apraksta garums 30–60000 rakstzīmes.</li>
+                </ul>
+                <p>Šis pārskats aptver līdz 500 nolasītajiem unikālajiem Jobicy inženierijas piedāvājumiem, nevis visu vietni. Ieraksti bez derīga nosaukuma vai drošas Jobicy saites netiek iekļauti. Importa atbilstība nav prasmju garantija; dublikātus atkārtoti nepievieno.</p>
+            </details>
+        </div>
+        <form method="get" class="d-flex gap-2 mb-3 flex-wrap">
+            <label for="reason" class="align-self-center">Rādīt</label>
+            <select id="reason" name="reason" class="form-select w-auto">
+                <option value="">Visus nolasītos</option>
+                <option value="eligible" selected="@(Model.Reason == "eligible")">Iziet atlasi</option>
+                <option value="rejected" selected="@(Model.Reason == "rejected")">Neiziet atlasi</option>
+                @foreach (var reason in Model.Reasons) { <option value="@reason.Code" selected="@(Model.Reason == reason.Code)">@reason.Label</option> }
+            </select>
+            <button class="btn btn-primary" type="submit">Filtrēt</button>
+        </form>
+        <p>Redzami: @Model.Rows.Count no @Model.Read. Iemesla filtrs rāda arī tos ierakstus, kuriem tas ir papildu šķērslis.</p>
+        <div class="table-responsive"><table class="table table-striped align-middle">
+            <thead><tr><th>Piedāvājums</th><th>Darba veids avotā</th><th>Reģions avotā</th><th>Visi atlases šķēršļi</th><th>Oriģināls</th></tr></thead>
+            <tbody>
+                @foreach (var row in Model.Rows)
+                {
+                    <tr>
+                        <td style="min-width:220px"><strong>@row.Title</strong><div class="small text-muted">@(row.PublishedAt?.ToString("dd.MM.yyyy HH:mm")) UTC</div></td>
+                        <td>@(string.IsNullOrWhiteSpace(row.Assessment.JobTypes) ? "Nav norādīts" : row.Assessment.JobTypes)</td>
+                        <td>@(string.IsNullOrWhiteSpace(row.Assessment.Geography) ? "Nav norādīts" : row.Assessment.Geography)</td>
+                        <td>@if (row.Assessment.Reasons.Count == 0) { <span class="badge bg-success">Iziet importa atlasi</span> }
+                            else { <ul class="mb-0">@foreach (var reason in row.Assessment.Reasons) { <li>@reason.Label</li> }</ul> }</td>
+                        <td><a href="@row.Url" target="_blank" rel="noopener noreferrer">Jobicy ↗</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table></div>
+        @if (Model.Rows.Count == 0) { <p>Šim filtram ierakstu nav.</p> }
+        <p class="small text-muted">Datu avots: <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a>. Noraidījumu pārskats saglabājas tikai līdz lietotnes restartēšanai vai nākamajai API rezultāta atjaunošanai.</p>
+    }
+</div>

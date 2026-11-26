@@ -16,6 +16,8 @@
     string deadline = ViewBag.Deadline ?? "";
     string soloFit = ViewBag.SoloFit ?? "";
     string actionable = ViewBag.Actionable ?? "";
+    string access = ViewBag.Access ?? "";
+    string kind = ViewBag.Kind ?? "";
 
     var sources = ViewBag.Sources as List<string>
         ?? new List<string>();
@@ -67,6 +69,8 @@
             </button>
         </form>
 
+        <a asp-action="Sources" class="btn btn-outline-primary">Meklēšanas avoti</a>
+        <a asp-action="JobicyDiagnostics" class="btn btn-outline-secondary">Jobicy atlases diagnostika</a>
         <a asp-action="QualificationAudit"
            class="btn btn-outline-secondary">
             Vērtēšanas audits
@@ -77,6 +81,12 @@
         </a>
     </div>
 
+    <div class="alert alert-info">
+        Automātiskā meklēšana: <strong>SS.com, IUB un Jobicy</strong>. SS.com rezultāti tiek atkārtoti izmantoti 30 minūtes;
+        pārbauda līdz 20 jaunākajiem programmētāju sludinājumiem. Jobicy meklē līgumdarbus/nepilnu slodzi (līdz 500 inženierijas piedāvājumiem, 30 minūšu kešatmiņa). Hubstaff, Truelancer un Ukrainas avoti pieejami
+        sadaļā <a asp-action="Sources">Meklēšanas avoti</a> manuālai pārbaudei.
+        Maksas platformu vecie ieraksti saglabāti, bet bezmaksas ieteikumos neiekļūst.
+    </div>
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success">
@@ -86,7 +96,8 @@
 
     @if (ViewBag.DiscoveryStatistics is List<LeadSourceStatistics> stats)
     {
-        <div class="card shadow-sm mb-4">
+        <p class="small text-muted">Līgumdarbu dati: <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a>. Konkrētā darba nosacījumi jāpārbauda oriģinālajā sludinājumā.</p>
+    <div class="card shadow-sm mb-4">
             <div class="card-header bg-white py-3">
                 <h5 class="mb-0">Pēdējās meklēšanas statistika</h5>
             </div>
@@ -107,7 +118,7 @@
                         @foreach (var stat in stats)
                         {
                             <tr>
-                                <td><strong>@stat.Source</strong></td>
+                                <td><strong>@stat.Source</strong>@if (stat.Source == "Jobicy") { <a asp-action="JobicyDiagnostics" class="d-block small">Kāpēc izslēgti?</a> }@if (stat.Notice != null) { <div class="small text-muted">@stat.Notice</div> }</td>
                                 <td>@stat.Read</td>
                                 <td>@stat.Qualified</td>
                                 <td>@stat.Duplicates</td>
@@ -222,6 +233,24 @@
                     </select>
                 </div>
 
+                <div class="col-md-3">
+                    <label class="form-label">Piedāvājuma veids</label>
+                    <select name="kind" class="form-select">
+                        <option value="">Visi veidi</option>
+                        <option value="project" selected="@(kind == "project")">Klientu pasūtījumi / citi ieraksti</option>
+                        <option value="contract" selected="@(kind == "contract")">Līgumdarbi / nepilna slodze</option>
+                        <option value="procurement" selected="@(kind == "procurement")">Iepirkumi</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Pieteikšanās izmaksas</label>
+                    <select name="access" class="form-select">
+                        <option value="">Visi, arī vēsturiskie</option>
+                        <option value="free" selected="@(access == "free")">Bez priekšapmaksas / bezmaksas limits</option>
+                        <option value="paid" selected="@(access == "paid")">Jāmaksā pirms darba</option>
+                        <option value="unknown" selected="@(access == "unknown")">Piekļuve jāpārbauda</option>
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label">Avots</label>
 
@@ -393,9 +422,10 @@
                     @foreach (var lead in leads)
                     {
                         var evaluation = qualificationService.EvaluateV2(
-                            lead.CompanyName ?? "", lead.Description ?? "");
+                            lead.CompanyName ?? "", lead.Description ?? "", lead.SourceType);
                         var solo = SoloFitService.Evaluate(lead);
                         var action = ActionabilityService.Evaluate(lead);
+                        var sourceAccess = SourceAccessService.Evaluate(lead);
 
                         string color = lead.Status switch
                         {
@@ -423,17 +453,20 @@
                                     @System.Net.WebUtility.HtmlDecode(
                                         lead.CompanyName)
                                 </strong>
+                                @if (lead.SourceType == JobicyLeadSourceService.ContractType) { <div class="badge bg-primary">Līgumdarbs / nepilna slodze</div> }
                             </td>
 
                             <td>
                                 <span class="badge bg-info text-dark">
                                     @host
                                 </span>
+                                <div class="mt-1"><span class="badge bg-@sourceAccess.CssClass">@sourceAccess.Label</span></div>
+                                <details class="small mt-1"><summary>Piekļuve</summary>@sourceAccess.Detail</details>
                             </td>
 
                             <td>
                                 <span class="badge bg-info text-dark">
-                                    @evaluation.OrderConfidence / 100
+                                    @(lead.SourceType == JobicyLeadSourceService.ContractType ? "Nav piemērojams" : $"{evaluation.OrderConfidence} / 100")
                                 </span>
                                 <details class="small text-muted mt-1">
                                     <summary>Pamatojums</summary>

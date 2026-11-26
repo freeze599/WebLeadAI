@@ -11,6 +11,7 @@ namespace WebLeadAI.Services
         private readonly RssLeadSourceService _rssService;
         private readonly LeadQualificationService _qualification;
         private readonly IubLeadSourceService _iub;
+        private readonly JobicyLeadSourceService _jobicy;
         private readonly ILogger<LeadDiscoveryService> _logger;
 
         public LeadDiscoveryService(
@@ -18,12 +19,14 @@ namespace WebLeadAI.Services
             RssLeadSourceService rssService,
             LeadQualificationService qualification,
             IubLeadSourceService iub,
+            JobicyLeadSourceService jobicy,
             ILogger<LeadDiscoveryService> logger)
         {
             _context = context;
             _rssService = rssService;
             _qualification = qualification;
             _iub = iub;
+            _jobicy = jobicy;
             _logger = logger;
         }
 
@@ -35,8 +38,9 @@ namespace WebLeadAI.Services
 
         public async Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync()
         {
-            var feeds = await _rssService.GetFeedResultsAsync();
+            var feeds = (await _rssService.GetFeedResultsAsync()).ToList();
             feeds.Add(await _iub.GetFeedResultAsync());
+            feeds.Add(await _jobicy.GetFeedResultAsync());
             var report = new List<LeadSourceStatistics>();
 
             var existingLeads = await _context.Leads
@@ -58,7 +62,8 @@ namespace WebLeadAI.Services
                 {
                     Source = feed.Source,
                     Read = feed.Items.Count,
-                    Error = feed.Error
+                    Error = feed.Error,
+                    Notice = feed.Notice
                 };
 
                 report.Add(stats);
@@ -68,10 +73,17 @@ namespace WebLeadAI.Services
                     if (string.IsNullOrWhiteSpace(item.Url))
                         continue;
 
+                    if (!item.IsCandidate || (feed.Source == "SS.com" && !SsLeadReader.IsProjectRequest(item.Title, item.Description)))
+                    {
+                        if (knownUrls.ContainsKey(item.Url)) stats.Duplicates++;
+                        else stats.Rejected++;
+                        continue;
+                    }
+
                     // Jaunais vērtēšanas algoritms 2.3
                     var evaluation = _qualification.EvaluateV2(
                         item.Title,
-                        item.Description);
+                        item.Description, item.SourceType);
 
                     if (feed.Source == "IUB")
                     {
@@ -133,7 +145,7 @@ namespace WebLeadAI.Services
                     {
                         CompanyName = title,
                         SourceUrl = item.Url,
-                        SourceType = feed.Source == "IUB" ? "Procurement" : "Advertisement",
+                        SourceType = feed.Source == "IUB" ? "Procurement" : item.SourceType,
                         Description = item.Description,
                         Status = "NeedsReview",
                         AILeadScore = evaluation.Score,
@@ -164,5 +176,6 @@ namespace WebLeadAI.Services
         public int Rejected { get; set; }
         public int Added { get; set; }
         public string? Error { get; set; }
+        public string? Notice { get; set; }
     }
 }

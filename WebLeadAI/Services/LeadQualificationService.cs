@@ -220,8 +220,10 @@ namespace WebLeadAI.Services
 
         // ALGORITMS 2.3 — prioritāte pēc prasmēm; RSS metadati izslēgti; 1.0 nemainīts.
         // IsQualified = ticams klienta pasūtījums, nevis prasmju garantija.
-        public LeadQualificationResult EvaluateV2(string title, string description)
+        public LeadQualificationResult EvaluateV2(string title, string description, string? sourceType = null)
         {
+            if (sourceType == JobicyLeadSourceService.ContractType)
+                return JobicyLeadSourceService.Evaluate(title, description);
             string heading = Normalize(title);
             // Vērtē klienta tekstu, nevis RSS kategorijas un platformas birkas.
             string requestDescription = LeadContentText.ForEvaluation(description);

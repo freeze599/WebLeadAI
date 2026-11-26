@@ -57,6 +57,13 @@ public static class ActionabilityService
         // Kopīgs pamats filtram un diagnostikai. Arī agrīna atgriešanās saglabā
         // pārējos šķēršļus, lai viena iemesla novēršana netiktu uztverta kā garantija.
         var reasons = new List<ExclusionReason>();
+        if (lead.SourceType == JobicyLeadSourceService.ContractType)
+            reasons.Add(new("contract_review", "Līgumdarbs jāizvērtē", "Tas nav klienta pasūtījums. Pārbaudi darba stundas, pieredzi un atļauju strādāt no Latvijas."));
+        var access = SourceAccessService.Evaluate(lead);
+        if (!access.NoUpfrontPayment)
+            reasons.Add(new(access.Code == "paid" ? "paid_access" : "unknown_access",
+                access.Label, access.Detail));
+        notes.Add(access.Label + ": " + access.Detail);
         if (rejected)
             reasons.Add(new("rejected", "Jau noraidīts", "Saglabātais statuss ir Rejected."));
         if (contacted)

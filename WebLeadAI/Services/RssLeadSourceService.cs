@@ -11,21 +11,14 @@ namespace WebLeadAI.Services
         private readonly HttpClient _httpClient;
         private readonly ILogger<RssLeadSourceService> _logger;
 
+        // Tikai pārbaudīta publiska RSS plūsma; maksas platformu imports izslēgts.
         private readonly Dictionary<string, string> _feeds = new()
         {
-            {
-                "Codeur",
-                "https://www.codeur.com/projects?format=rss"
-            },
-            {
-                "FreelanceUA",
-                "https://freelance.ua/orders/rss?t=1&cat_id=17&sub_id=0"
-            },
-            {
-                "Freelancer",
-                "https://www.freelancer.com/rss.xml"
-            }
+            { "SS.com", "https://www.ss.com/lv/work/are-required/programmer/rss/" }
         };
+        private static readonly SemaphoreSlim Gate = new(1, 1);
+        private static List<RssFeedResult>? _cached;
+        private static DateTime _cacheUntil;
 
         public RssLeadSourceService(
             HttpClient httpClient,
@@ -43,7 +36,22 @@ namespace WebLeadAI.Services
 
         public async Task<List<RssFeedResult>> GetFeedResultsAsync()
         {
+            await Gate.WaitAsync();
+            try
+            {
+                if (_cached != null && DateTime.UtcNow < _cacheUntil) return _cached;
+                var results = await FetchFeedsAsync();
+                _cached = results;
+                _cacheUntil = DateTime.UtcNow.AddMinutes(results.Any(x => x.Error != null) ? 2 : 30);
+                return results;
+            }
+            finally { Gate.Release(); }
+        }
+
+        private async Task<List<RssFeedResult>> FetchFeedsAsync()
+        {
             var results = new List<RssFeedResult>();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
 
             foreach (var feed in _feeds)
             {
@@ -57,7 +65,7 @@ namespace WebLeadAI.Services
                         feed.Key);
 
                     using var response =
-                        await _httpClient.GetAsync(feed.Value);
+                        await _httpClient.GetAsync(feed.Value, deadline.Token);
 
                     response.EnsureSuccessStatusCode();
 
@@ -77,11 +85,11 @@ namespace WebLeadAI.Services
                         SyndicationFeed.Load(reader);
 
                     if (syndicationFeed == null)
-                        continue;
+                        throw new InvalidOperationException("Avots neatgrieza RSS plūsmu.");
 
                     int count = 0;
 
-                    foreach (var item in syndicationFeed.Items)
+                    foreach (var item in syndicationFeed.Items.Take(20))
                     {
                         string title = LeadContentText.ToPlainText(item.Title?.Text);
                         string rawDescription = item.Summary?.Text
@@ -108,6 +116,25 @@ namespace WebLeadAI.Services
 
                         if (url.Length > 500)
                             continue;
+
+                        if (!SsLeadReader.IsAllowedUrl(url)) continue;
+                        try
+                        {
+                            await Task.Delay(1000, deadline.Token);
+                            using var detail = await _httpClient.GetAsync(url, deadline.Token);
+                            detail.EnsureSuccessStatusCode();
+                            if (!SsLeadReader.IsAllowedUrl(detail.RequestMessage?.RequestUri?.ToString() ?? ""))
+                                throw new InvalidOperationException("SS.com pāradresācija ārpus atļautās kategorijas.");
+                            description = SsLeadReader.ReadDescription(await detail.Content.ReadAsStringAsync());
+                        }
+                        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or RegexMatchTimeoutException)
+                        {
+                            feedResult.Error = "Daļu SS.com pilno tekstu neizdevās nolasīt; šie ieraksti izlaisti.";
+                            _logger.LogWarning(ex, "SS.com teksts nav pieejams: {Url}", url);
+                            if (deadline.IsCancellationRequested) break;
+                            if (ex is HttpRequestException h && h.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests) break;
+                            continue;
+                        }
 
                         DateTime? publishedAt = null;
 
@@ -157,6 +184,9 @@ namespace WebLeadAI.Services
         public string Description { get; set; } = "";
         public string Url { get; set; } = "";
         public string Source { get; set; } = "";
+        public string SourceType { get; set; } = "Advertisement";
+        public bool IsCandidate { get; set; } = true;
+        public WebLeadAI.Models.JobicyItemDiagnostics? JobicyDiagnostics { get; set; }
         public DateTime? PublishedAt { get; set; }
     }
 }
@@ -168,6 +198,8 @@ namespace WebLeadAI.Services
         public string Source { get; set; } = "";
         public List<RssLeadItem> Items { get; set; } = new();
         public string? Error { get; set; }
+        public string? Notice { get; set; }
+        public DateTime? FetchedAtUtc { get; set; }
     }
 }
 

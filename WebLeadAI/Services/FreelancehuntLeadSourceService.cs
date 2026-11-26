@@ -16,6 +16,7 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
     private static string? cachedKey;
     private static DateTime cacheUntil;
     private const int MaxPages = 5, MaxItems = 250, MaxDetails = 35;
+    private const int HighCompetitionBidCount = 100; // Warning only; not a claim that bids are closed.
     // Freelancehunt skill IDs: Website Development (96), Web Programming (99).
     // Query each skill separately to avoid exhausting detail requests on unrelated jobs.
     private static readonly int[] TargetSkills = [96, 99];
@@ -35,6 +36,7 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
             if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil) return cached;
             var result = new RssFeedResult { Source = "Freelancehunt" };
             int omitted = 0, detailCount = 0, plus = 0, incomplete = 0, unknownPlus = 0, received = 0, checkedPages = 0;
+            int highCompetition = 0, bidsUnknown = 0, recentCandidates = 0;
             var candidateReasons = new Dictionary<string, int>();
             var skipped = new Dictionary<string, int>();
             void Skip(string reason) { omitted++; skipped[reason] = skipped.GetValueOrDefault(reason) + 1; }
@@ -52,7 +54,7 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
                         // Fixed-origin requests only. Never send the API credential to a feed-provided URL.
                         if (checkedPages > 0) await Task.Delay(700, deadline.Token);
                         checkedPages++;
-                        using var document = await ReadAsync(Endpoint + "?filter[skill_id]=" + skill + "&page[number]=" + page, token, deadline.Token);
+                        using var document = await ReadAsync(Endpoint + "?filter[skill_id]=" + skill + "&filter[status_id]=11&page[number]=" + page, token, deadline.Token);
                         var root = document.RootElement;
                         if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
                             throw new ImportException("API atbilde nesatur projektu sarakstu.");
@@ -64,6 +66,14 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
                             long id = Id(summary);
                             if (id <= 0) { Skip("nederīgs ID"); formatFailures++; continue; }
                             if (!seen.Add(id)) { Skip("atkārtots ID API atbildē"); continue; }
+                            // If the summary explicitly proves that bidding is unavailable, do not
+                            // spend one of the limited detail requests on it. Unknown fields are
+                            // NOT interpreted as rejection (the API may omit them in summaries).
+                            if (KnownUnavailable(summary, DateTime.UtcNow, out string unavailableReason))
+                            {
+                                Skip(unavailableReason);
+                                continue;
+                            }
                             JsonElement project = summary;
                             if (!Complete(summary))
                             {
@@ -77,7 +87,18 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
                             }
                             var item = ParseProject(project, DateTime.UtcNow, out var parseFailure);
                             if (item == null) { Skip(parseFailure!); formatFailures++; continue; }
-                            if (Flag(project.GetProperty("attributes"), "is_only_for_plus") == null) unknownPlus++;
+                            var attributes = project.GetProperty("attributes");
+                            if (Flag(attributes, "is_only_for_plus") == null) unknownPlus++;
+                            if (item.IsCandidate)
+                            {
+                                var publishedAt = Date(attributes, "published_at");
+                                if (publishedAt.HasValue && publishedAt >= DateTime.UtcNow.AddDays(-2)) recentCandidates++;
+                                if (Count(attributes, "bid_count") is int bids)
+                                {
+                                    if (bids >= HighCompetitionBidCount) highCompetition++;
+                                }
+                                else bidsUnknown++;
+                            }
                             if (!item.IsCandidate)
                             {
                                 string reason = CandidateRejectionReason(project, DateTime.UtcNow);
@@ -106,12 +127,13 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
             else if (result.Error == null && limited)
                 result.Error = "Daļēja pārbaude: sasniegts importa limits; nav pārbaudīti visi API piedāvājumi.";
             result.FetchedAtUtc = DateTime.UtcNow;
-            result.Notice = $"Filtrs: mājaslapu izstrāde (96), web programmēšana (99); API lapas: {checkedPages}. Saņemti API ieraksti: {received}; nolasīti: {result.Items.Count}; detaļu pieprasījumi: {detailCount}. API: līdz {MaxPages} lapām katrai prasmei / {MaxItems} ierakstiem kopā; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; Plus statuss nav norādīts: {unknownPlus} (pieeja jāpārbauda); citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
+            result.Notice = $"Filtrs: mājaslapu izstrāde (96), web programmēšana (99), API statuss 11 (atvērts pieteikumiem); API lapas: {checkedPages}. Saņemti API ieraksti: {received}; nolasīti: {result.Items.Count}; detaļu pieprasījumi: {detailCount}. API: līdz {MaxPages} lapām katrai prasmei / {MaxItems} ierakstiem kopā; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. No API kandidātiem publicēti pēdējās 48 stundās: {recentCandidates}; ar vismaz {HighCompetitionBidCount} piedāvājumiem: {highCompetition}; bez piedāvājumu skaita: {bidsUnknown}. Liels piedāvājumu skaits ir brīdinājums, nevis pierādījums slēgtai pieteikšanai. Pieteikšanās iespēja vienmēr jāpārbauda oriģinālajā lapā. Plus izslēgti: {plus}; Plus statuss nav norādīts: {unknownPlus} (pieeja jāpārbauda); citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
                 (candidateReasons.Count > 0 ? "Neatbilstošu projektu iemesli: " + string.Join("; ", candidateReasons.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 (skipped.Count > 0 ? "Izlaisti: " + string.Join("; ", skipped.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 "Profila pieteikšanās piekļuve vēl jāpārbauda — atradumus skaties sadaļā ‘Piekļuve jāpārbauda’, avots freelancehunt.com. Pieteikumi netiek sūtīti.";
             cached = result; cachedKey = key;
-            cacheUntil = DateTime.UtcNow.Add(!requestFailed && formatFailures == 0 ? TimeSpan.FromMinutes(30) : retry);
+            // Shorter successful cache favors new projects while still avoiding repeated API calls.
+            cacheUntil = DateTime.UtcNow.Add(!requestFailed && formatFailures == 0 ? TimeSpan.FromMinutes(10) : retry);
             return result;
         }
         finally { Gate.Release(); }
@@ -141,6 +163,31 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         if (!media.Contains("json", StringComparison.OrdinalIgnoreCase))
             throw new ImportException("Freelancehunt atgrieza lapu JSON vietā. Pārbaudi API piekļuvi.");
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellation));
+    }
+
+    private static int? Count(JsonElement attributes, string field)
+    {
+        if (attributes.ValueKind != JsonValueKind.Object || !attributes.TryGetProperty(field, out var value)) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int count) && count >= 0) return count;
+        return null;
+    }
+
+    private static bool KnownUnavailable(JsonElement project, DateTime now, out string reason)
+    {
+        reason = "";
+        if (!project.TryGetProperty("attributes", out var a) || a.ValueKind != JsonValueKind.Object) return false;
+        if (a.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Object &&
+            status.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number &&
+            id.TryGetInt32(out int statusId) && statusId != 11)
+        {
+            reason = "API statuss nav atvērts pieteikumiem";
+            return true;
+        }
+        if (Flag(a, "is_only_for_plus") == true) { reason = "tikai Plus"; return true; }
+        if (Flag(a, "is_personal") == true) { reason = "personisks projekts"; return true; }
+        var expires = Date(a, "expired_at");
+        if (expires.HasValue && expires <= now) { reason = "beidzies pieteikšanās termiņš"; return true; }
+        return false;
     }
 
     private static bool Complete(JsonElement p) => p.TryGetProperty("attributes", out var a) &&

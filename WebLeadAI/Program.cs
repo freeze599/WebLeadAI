@@ -62,9 +62,36 @@ builder.Services.AddHttpClient<FreelancehuntLeadSourceService>(client =>
 
 // Single-process gate and background Freelancehunt-only discovery.
 builder.Services.AddSingleton<DiscoveryRunState>();
+builder.Services.AddSingleton<NewLeadEmailNotifier>();
 builder.Services.AddHostedService<AutomaticFreelancehuntService>();
 
 var app = builder.Build();
+
+// One-off notification pipeline test. No web server, discovery, or database writes.
+// Run only on explicit request: dotnet run -- --test-email
+if (args.Contains("--test-email", StringComparer.OrdinalIgnoreCase))
+{
+    try
+    {
+        var notifier = app.Services.GetRequiredService<NewLeadEmailNotifier>();
+        var sample = new[]
+        {
+            new NewLeadNotification(
+                "TESTS — WebLeadAI v7 e-pasta paziņojumu pārbaude (nav jauns projekts)",
+                "https://freelancehunt.com/project/development-landing-page-for/1666567.html",
+                100,
+                null)
+        };
+        var result = await notifier.SendAsync(sample, CancellationToken.None);
+        Console.WriteLine(result ?? "Testa e-pasts netika nosūtīts (pārbaudi filtrus un konfigurāciju).");
+    }
+    catch (Exception ex)
+    {
+        // Do not display exception internals that might include SMTP connection details.
+        Console.Error.WriteLine($"Testa nosūtīšana neizdevās: {ex.GetType().Name}. Pārbaudi lietotnes žurnālu un Gmail SMTP iestatījumus.");
+    }
+    return;
+}
 // Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
 if (args.Contains("--backfill-procurements"))
 {

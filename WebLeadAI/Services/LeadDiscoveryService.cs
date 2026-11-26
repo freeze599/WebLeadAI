@@ -171,6 +171,7 @@ namespace WebLeadAI.Services
                     knownUrls[item.Url] = lead;
 
                     stats.Added++;
+                    stats.NewLeads.Add(new NewLeadNotification(title, item.Url, evaluation.Score, item.PublishedAt));
                 }
             }
 
@@ -180,8 +181,12 @@ namespace WebLeadAI.Services
         }
     }
 
+    public sealed record NewLeadNotification(string Title, string Url, int Score, DateTime? PublishedAt);
+
     public class LeadSourceStatistics
     {
+        [System.Text.Json.Serialization.JsonIgnore]
+        public List<NewLeadNotification> NewLeads { get; set; } = new();
         public string Source { get; set; } = "";
         public int Read { get; set; }
         public int Qualified { get; set; }

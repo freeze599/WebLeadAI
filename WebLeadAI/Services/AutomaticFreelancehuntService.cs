@@ -30,6 +30,7 @@ public sealed class AutomaticFreelancehuntService(
     IServiceScopeFactory scopes,
     DiscoveryRunState state,
     IConfiguration config,
+    NewLeadEmailNotifier notifier,
     ILogger<AutomaticFreelancehuntService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -59,7 +60,28 @@ public sealed class AutomaticFreelancehuntService(
                         var report = await discovery.DiscoverFreelancehuntAsync();
                         var fh = report.FirstOrDefault(x => x.Source == "Freelancehunt");
                         int added = report.Sum(x => x.Added);
-                        state.Record(added, fh?.Error);
+                        string? message = fh?.Error;
+                        // Send only leads inserted in this run, never existing/deduplicated records.
+                        if (fh is not null && fh.NewLeads.Count > 0)
+                        {
+                            try
+                            {
+                                var notification = await notifier.SendAsync(fh.NewLeads, stoppingToken);
+                                if (notification is not null)
+                                {
+                                    message = string.IsNullOrWhiteSpace(message) ? notification : message + " " + notification;
+                                }
+                            }
+                            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
+                            catch (Exception ex)
+                            {
+                                message = string.IsNullOrWhiteSpace(message)
+                                    ? "E-pasta paziņojums neizdevās; skati servera žurnālu."
+                                    : message + " E-pasta paziņojums neizdevās; skati servera žurnālu.";
+                                logger.LogError(ex, "Jauno projektu paziņojuma sūtīšana neizdevās.");
+                            }
+                        }
+                        state.Record(added, message);
                         logger.LogInformation("Freelancehunt automātiskā pārbaude pabeigta. Jauni: {Added}. Ziņojums: {Error}", added, fh?.Error ?? "nav");
                     }
                     catch (Exception ex)

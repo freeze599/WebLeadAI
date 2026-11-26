@@ -15,7 +15,10 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
     private static RssFeedResult? cached;
     private static string? cachedKey;
     private static DateTime cacheUntil;
-    private const int MaxPages = 5, MaxItems = 250, MaxDetails = 20;
+    private const int MaxPages = 5, MaxItems = 250, MaxDetails = 35;
+    // Freelancehunt skill IDs: Website Development (96), Web Programming (99).
+    // Query each skill separately to avoid exhausting detail requests on unrelated jobs.
+    private static readonly int[] TargetSkills = [96, 99];
     private const string Endpoint = "https://api.freelancehunt.com/v2/projects";
 
     public async Task<RssFeedResult> GetFeedResultAsync()
@@ -31,7 +34,8 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         {
             if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil) return cached;
             var result = new RssFeedResult { Source = "Freelancehunt" };
-            int omitted = 0, detailCount = 0, plus = 0, incomplete = 0, received = 0;
+            int omitted = 0, detailCount = 0, plus = 0, incomplete = 0, unknownPlus = 0, received = 0, checkedPages = 0;
+            var candidateReasons = new Dictionary<string, int>();
             var skipped = new Dictionary<string, int>();
             void Skip(string reason) { omitted++; skipped[reason] = skipped.GetValueOrDefault(reason) + 1; }
             int formatFailures = 0;
@@ -41,43 +45,55 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
             var seen = new HashSet<long>();
             try
             {
-                for (int page = 1; page <= MaxPages; page++)
+                foreach (int skill in TargetSkills)
                 {
-                    if (page > 1) await Task.Delay(1100, deadline.Token);
-                    using var document = await ReadAsync(Endpoint + "?page[number]=" + page, token, deadline.Token);
-                    var root = document.RootElement;
-                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-                        throw new ImportException("API atbilde nesatur projektu sarakstu.");
-                    if (data.GetArrayLength() == 0) break;
-                    foreach (var summary in data.EnumerateArray())
+                    for (int page = 1; page <= MaxPages; page++)
                     {
-                        if (received >= MaxItems) { limited = true; break; }
-                        received++;
-                        long id = Id(summary);
-                        if (id <= 0) { Skip("nederīgs ID"); formatFailures++; continue; }
-                        if (!seen.Add(id)) { Skip("atkārtots ID API atbildē"); continue; }
-                        JsonElement project = summary;
-                        if (!Complete(summary))
+                        // Fixed-origin requests only. Never send the API credential to a feed-provided URL.
+                        if (checkedPages > 0) await Task.Delay(700, deadline.Token);
+                        checkedPages++;
+                        using var document = await ReadAsync(Endpoint + "?filter[skill_id]=" + skill + "&page[number]=" + page, token, deadline.Token);
+                        var root = document.RootElement;
+                        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+                            throw new ImportException("API atbilde nesatur projektu sarakstu.");
+                        if (data.GetArrayLength() == 0) break;
+                        foreach (var summary in data.EnumerateArray())
                         {
-                            if (detailCount >= MaxDetails) { limited = true; Skip("sasniegts pilno aprakstu pieprasījumu limits"); continue; }
-                            await Task.Delay(1100, deadline.Token);
-                            detailCount++;
-                            using var details = await ReadAsync(Endpoint + "/" + id, token, deadline.Token);
-                            if (details.RootElement.ValueKind != JsonValueKind.Object || !details.RootElement.TryGetProperty("data", out var detail) || Id(detail) != id)
-                            { Skip("detaļu atbildē trūkst atbilstoša projekta"); formatFailures++; continue; }
-                            project = detail.Clone();
+                            if (received >= MaxItems) { limited = true; break; }
+                            received++;
+                            long id = Id(summary);
+                            if (id <= 0) { Skip("nederīgs ID"); formatFailures++; continue; }
+                            if (!seen.Add(id)) { Skip("atkārtots ID API atbildē"); continue; }
+                            JsonElement project = summary;
+                            if (!Complete(summary))
+                            {
+                                if (detailCount >= MaxDetails) { limited = true; Skip("sasniegts pilno aprakstu pieprasījumu limits"); continue; }
+                                await Task.Delay(700, deadline.Token);
+                                detailCount++;
+                                using var details = await ReadAsync(Endpoint + "/" + id, token, deadline.Token);
+                                if (details.RootElement.ValueKind != JsonValueKind.Object || !details.RootElement.TryGetProperty("data", out var detail) || Id(detail) != id)
+                                { Skip("detaļu atbildē trūkst atbilstoša projekta"); formatFailures++; continue; }
+                                project = detail.Clone();
+                            }
+                            var item = ParseProject(project, DateTime.UtcNow, out var parseFailure);
+                            if (item == null) { Skip(parseFailure!); formatFailures++; continue; }
+                            if (Flag(project.GetProperty("attributes"), "is_only_for_plus") == null) unknownPlus++;
+                            if (!item.IsCandidate)
+                            {
+                                string reason = CandidateRejectionReason(project, DateTime.UtcNow);
+                                candidateReasons[reason] = candidateReasons.GetValueOrDefault(reason) + 1;
+                                if (reason == "tikai Plus") plus++;
+                                else incomplete++;
+                            }
+                            result.Items.Add(item);
                         }
-                        var item = ParseProject(project, DateTime.UtcNow, out var parseFailure);
-                        if (item == null) { Skip(parseFailure!); formatFailures++; continue; }
-                        if (project.TryGetProperty("attributes", out var a) && Flag(a, "is_only_for_plus") == true) plus++;
-                        else if (!item.IsCandidate) incomplete++;
-                        result.Items.Add(item);
+                        bool hasNext = root.TryGetProperty("links", out var links) && !string.IsNullOrWhiteSpace(Text(links, "next"));
+                        // Never follow API-supplied URLs with the credential. Construct fixed-origin pages.
+                        if (hasNext && received >= MaxItems) limited = true;
+                        if (!hasNext || received >= MaxItems) break;
+                        if (page == MaxPages) limited = true;
                     }
-                    bool hasNext = root.TryGetProperty("links", out var links) && !string.IsNullOrWhiteSpace(Text(links, "next"));
-                    // Never follow API-supplied URLs with the credential. Construct fixed-origin pages.
-                    if (hasNext && received >= MaxItems) limited = true;
-                    if (!hasNext || received >= MaxItems) break;
-                    if (page == MaxPages) limited = true;
+                    if (received >= MaxItems) { limited = true; break; }
                 }
             }
             catch (ImportException ex) { result.Error = ex.Message; retry = ex.RetryAfter ?? retry; }
@@ -90,7 +106,8 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
             else if (result.Error == null && limited)
                 result.Error = "Daļēja pārbaude: sasniegts importa limits; nav pārbaudīti visi API piedāvājumi.";
             result.FetchedAtUtc = DateTime.UtcNow;
-            result.Notice = $"Saņemti API ieraksti: {received}; nolasīti: {result.Items.Count}; detaļu pieprasījumi: {detailCount}. API: līdz {MaxPages} lapām / {MaxItems} ierakstiem; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
+            result.Notice = $"Filtrs: mājaslapu izstrāde (96), web programmēšana (99); API lapas: {checkedPages}. Saņemti API ieraksti: {received}; nolasīti: {result.Items.Count}; detaļu pieprasījumi: {detailCount}. API: līdz {MaxPages} lapām katrai prasmei / {MaxItems} ierakstiem kopā; pilnie apraksti līdz {MaxDetails} papildu pieprasījumos. Plus izslēgti: {plus}; Plus statuss nav norādīts: {unknownPlus} (pieeja jāpārbauda); citi nepieejami/nepilnīgi: {incomplete}; nenolasāmi/izlaisti: {omitted}. " +
+                (candidateReasons.Count > 0 ? "Neatbilstošu projektu iemesli: " + string.Join("; ", candidateReasons.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 (skipped.Count > 0 ? "Izlaisti: " + string.Join("; ", skipped.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 "Profila pieteikšanās piekļuve vēl jāpārbauda — atradumus skaties sadaļā ‘Piekļuve jāpārbauda’, avots freelancehunt.com. Pieteikumi netiek sūtīti.";
             cached = result; cachedKey = key;
@@ -127,8 +144,29 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
     }
 
     private static bool Complete(JsonElement p) => p.TryGetProperty("attributes", out var a) &&
-        Flag(a, "is_only_for_plus").HasValue && a.TryGetProperty("status", out _) &&
+        a.TryGetProperty("status", out _) &&
         (!string.IsNullOrWhiteSpace(Text(a, "description")) || !string.IsNullOrWhiteSpace(Text(a, "description_html")));
+
+    // Mirrors the candidate checks so the report explains exclusions without changing scoring thresholds.
+    private static string CandidateRejectionReason(JsonElement project, DateTime now)
+    {
+        if (!project.TryGetProperty("attributes", out var a) || a.ValueKind != JsonValueKind.Object)
+            return "trūkst attributes";
+        int status = a.TryGetProperty("status", out var statusObj) && statusObj.ValueKind == JsonValueKind.Object &&
+            statusObj.TryGetProperty("id", out var s) && s.ValueKind == JsonValueKind.Number && s.TryGetInt32(out int id) ? id : 0;
+        if (status != 11) return "nav atvērts pieteikumiem / nav statusa";
+        if (Flag(a, "is_only_for_plus") == true) return "tikai Plus";
+        if (Flag(a, "is_personal") == true) return "personisks projekts";
+        string? raw = Text(a, "description");
+        if (string.IsNullOrWhiteSpace(raw)) raw = Text(a, "description_html");
+        int length = LeadContentText.ToPlainText(raw).Length;
+        if (length < 30 || length > 60000) return "trūkst derīga apraksta";
+        var published = Date(a, "published_at");
+        if (!published.HasValue || published > now.AddMinutes(5) || published < now.AddDays(-30)) return "nav derīga publicēšanas datuma";
+        var expires = Date(a, "expired_at");
+        if (!expires.HasValue || expires <= now) return "termiņš beidzies vai nav datuma";
+        return "cits iemesls";
+    }
 
     public static RssLeadItem? ParseProject(JsonElement project, DateTime now) => ParseProject(project, now, out _);
 
@@ -153,7 +191,7 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         int status = a.TryGetProperty("status", out var statusObj) && statusObj.ValueKind == JsonValueKind.Object &&
             statusObj.TryGetProperty("id", out var s) && s.ValueKind == JsonValueKind.Number && s.TryGetInt32(out int statusId) ? statusId : 0;
         var published = Date(a, "published_at"); var expires = Date(a, "expired_at");
-        bool candidate = status == 11 && Flag(a, "is_only_for_plus") == false && Flag(a, "is_personal") != true &&
+        bool candidate = status == 11 && Flag(a, "is_only_for_plus") != true && Flag(a, "is_personal") != true &&
             description.Length is >= 30 and <= 60000 &&
             published.HasValue && published <= now.AddMinutes(5) && published >= now.AddDays(-30) &&
             expires.HasValue && expires > now;

@@ -64,6 +64,7 @@ builder.Services.AddHttpClient<FreelancehuntLeadSourceService>(client =>
 builder.Services.AddSingleton<DiscoveryRunState>();
 builder.Services.AddSingleton<NewLeadEmailNotifier>();
 builder.Services.AddHostedService<AutomaticFreelancehuntService>();
+builder.Services.AddHostedService<LeadEmailOutboxWorker>();
 
 var app = builder.Build();
 
@@ -92,6 +93,68 @@ if (args.Contains("--test-email", StringComparer.OrdinalIgnoreCase))
     }
     return;
 }
+// One-off, opt-in outbox integration test. Does not create a Lead or run discovery.
+// Enqueue once: dotnet run -- --test-outbox-enqueue
+// Inspect:      dotnet run -- --test-outbox-status
+// Then run normally so the existing background worker delivers the queued message.
+const string outboxTestUrl = "https://freelancehunt.com/project/development-landing-page-for/1666567.html?webleadai_outbox_test=v8";
+if (args.Contains("--test-outbox-enqueue", StringComparer.OrdinalIgnoreCase) ||
+    args.Contains("--test-outbox-status", StringComparer.OrdinalIgnoreCase))
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var testItem = await db.LeadEmailOutbox.SingleOrDefaultAsync(x => x.SourceUrl == outboxTestUrl);
+        if (args.Contains("--test-outbox-enqueue", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!builder.Configuration.GetValue("LeadNotifications:Enabled", false))
+            {
+                Console.WriteLine("Paziņojumi nav ieslēgti. Nekas netika pievienots.");
+                return;
+            }
+            if (testItem is null)
+            {
+                testItem = new WebLeadAI.Models.LeadEmailOutbox
+                {
+                    SourceUrl = outboxTestUrl,
+                    Title = "TESTS — WebLeadAI v8 paziņojumu rindas pārbaude (NAV klienta projekts)",
+                    Score = 100,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    NextAttemptUtc = DateTime.UtcNow
+                };
+                db.LeadEmailOutbox.Add(testItem);
+                await db.SaveChangesAsync();
+                Console.WriteLine($"Testa ziņojums pievienots rindā (ID {testItem.Id}). Tagad palaid dotnet run.");
+            }
+            else
+            {
+                Console.WriteLine($"Testa ziņojums jau ir rindā (ID {testItem.Id}); jauns netika veidots.");
+            }
+        }
+        if (testItem is null)
+        {
+            Console.WriteLine("Testa ziņojums rindā vēl nav izveidots.");
+        }
+        else
+        {
+            string status = testItem.SentAtUtc.HasValue ? "NOSŪTĪTS" :
+                testItem.NextAttemptUtc > DateTime.UtcNow ? "GAIDA ATKĀRTOTU MĒĢINĀJUMU" : "GAIDA NOSŪTĪŠANU";
+            Console.WriteLine($"ID: {testItem.Id}; statuss: {status}; mēģinājumi ar kļūdu: {testItem.Attempts}.");
+            if (testItem.SentAtUtc.HasValue)
+                Console.WriteLine($"Nosūtīts (UTC): {testItem.SentAtUtc.Value:yyyy-MM-dd HH:mm:ss}");
+            else if (testItem.Attempts > 0)
+                Console.WriteLine($"Nākamais mēģinājums (UTC): {testItem.NextAttemptUtc:yyyy-MM-dd HH:mm:ss}; kļūdas veids: {testItem.LastError}");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Rindas testa kļūda: {ex.GetType().Name}. Pārbaudi, vai v8 migrācija ir izpildīta.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 // Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
 if (args.Contains("--backfill-procurements"))
 {

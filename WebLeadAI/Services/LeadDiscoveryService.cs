@@ -14,6 +14,7 @@ namespace WebLeadAI.Services
         private readonly JobicyLeadSourceService _jobicy;
         private readonly FreelancehuntLeadSourceService _freelancehunt;
         private readonly ILogger<LeadDiscoveryService> _logger;
+        private readonly IConfiguration _config;
 
         public LeadDiscoveryService(
             AppDbContext context,
@@ -22,7 +23,7 @@ namespace WebLeadAI.Services
             IubLeadSourceService iub,
             JobicyLeadSourceService jobicy,
             FreelancehuntLeadSourceService freelancehunt,
-            ILogger<LeadDiscoveryService> logger)
+            ILogger<LeadDiscoveryService> logger, IConfiguration config)
         {
             _context = context;
             _rssService = rssService;
@@ -31,6 +32,7 @@ namespace WebLeadAI.Services
             _jobicy = jobicy;
             _freelancehunt = freelancehunt;
             _logger = logger;
+            _config = config;
         }
 
         public async Task<int> DiscoverLeadsAsync()
@@ -172,6 +174,27 @@ namespace WebLeadAI.Services
 
                     stats.Added++;
                     stats.NewLeads.Add(new NewLeadNotification(title, item.Url, evaluation.Score, item.PublishedAt));
+                    // Enqueue in the SAME SaveChanges as the lead: no lost notifications
+                    // between commit and SMTP. Only automatic Freelancehunt discoveries.
+                    int alertThreshold = Math.Clamp(_config.GetValue("LeadNotifications:MinimumScore", 60), 0, 100);
+                    if (freelancehuntOnly && feed.Source == "Freelancehunt" &&
+                        _config.GetValue("LeadNotifications:Enabled", false) &&
+                        evaluation.Score >= alertThreshold &&
+                        Uri.TryCreate(item.Url, UriKind.Absolute, out var alertUri) &&
+                        alertUri.Scheme == Uri.UriSchemeHttps &&
+                        (alertUri.Host.Equals("freelancehunt.com", StringComparison.OrdinalIgnoreCase) ||
+                         alertUri.Host.EndsWith(".freelancehunt.com", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        _context.LeadEmailOutbox.Add(new LeadEmailOutbox
+                        {
+                            SourceUrl = item.Url,
+                            Title = title,
+                            Score = evaluation.Score,
+                            PublishedAt = item.PublishedAt,
+                            CreatedAtUtc = DateTime.UtcNow,
+                            NextAttemptUtc = DateTime.UtcNow
+                        });
+                    }
                 }
             }
 

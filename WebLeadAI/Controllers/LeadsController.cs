@@ -12,13 +12,15 @@ namespace WebLeadAI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly LeadDiscoveryService _discoveryService;
+        private readonly DiscoveryRunState _runState;
 
         public LeadsController(
             AppDbContext context,
-            LeadDiscoveryService discoveryService)
+            LeadDiscoveryService discoveryService, DiscoveryRunState runState)
         {
             _context = context;
             _discoveryService = discoveryService;
+            _runState = runState;
         }
 
         [HttpGet]
@@ -41,6 +43,7 @@ namespace WebLeadAI.Controllers
             string? access,
             string? kind)
         {
+            ViewBag.AutoDiscovery = _runState.Snapshot();
             var allLeads = await _context.Leads
                 .AsNoTracking()
                 .ToListAsync();
@@ -362,17 +365,20 @@ namespace WebLeadAI.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Discover()
         {
-            var report =
-                await _discoveryService.DiscoverWithStatisticsAsync();
-
-            int added = report.Sum(x => x.Added);
-
-            TempData["DiscoveryStatistics"] =
-                JsonSerializer.Serialize(report);
-
-            TempData["Success"] =
-                $"Meklēšana pabeigta. Pievienoti {added} jauni projekti.";
-
+            // Manual and background discoveries must not race SQLite or URL deduplication.
+            if (!await _runState.Gate.WaitAsync(0))
+            {
+                TempData["Success"] = "Meklēšana jau notiek fonā. Atver lapu vēlreiz pēc tās pabeigšanas.";
+                return RedirectToAction(nameof(Index));
+            }
+            try
+            {
+                var report = await _discoveryService.DiscoverWithStatisticsAsync();
+                int added = report.Sum(x => x.Added);
+                TempData["DiscoveryStatistics"] = JsonSerializer.Serialize(report);
+                TempData["Success"] = $"Meklēšana pabeigta. Pievienoti {added} jauni projekti.";
+            }
+            finally { _runState.Gate.Release(); }
             return RedirectToAction(nameof(Index));
         }
 

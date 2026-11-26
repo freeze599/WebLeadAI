@@ -39,11 +39,20 @@ namespace WebLeadAI.Services
             return report.Sum(x => x.Added);
         }
 
-        public async Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync()
+        public Task<List<LeadSourceStatistics>> DiscoverWithStatisticsAsync() => DiscoverInternalAsync(false);
+
+        // Background polling reads ONLY Freelancehunt; no extra Jobicy / SS.com / IUB calls.
+        public Task<List<LeadSourceStatistics>> DiscoverFreelancehuntAsync() => DiscoverInternalAsync(true);
+
+        private async Task<List<LeadSourceStatistics>> DiscoverInternalAsync(bool freelancehuntOnly)
         {
-            var feeds = (await _rssService.GetFeedResultsAsync()).ToList();
-            feeds.Add(await _iub.GetFeedResultAsync());
-            feeds.Add(await _jobicy.GetFeedResultAsync());
+            var feeds = new List<RssFeedResult>();
+            if (!freelancehuntOnly)
+            {
+                feeds.AddRange(await _rssService.GetFeedResultsAsync());
+                feeds.Add(await _iub.GetFeedResultAsync());
+                feeds.Add(await _jobicy.GetFeedResultAsync());
+            }
             feeds.Add(await _freelancehunt.GetFeedResultAsync());
             var report = new List<LeadSourceStatistics>();
 

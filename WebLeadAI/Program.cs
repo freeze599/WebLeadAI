@@ -60,6 +60,10 @@ builder.Services.AddHttpClient<FreelancehuntLeadSourceService>(client =>
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
   .RedactLoggedHeaders(new[] { "Authorization" });
 
+// Single-process gate and background Freelancehunt-only discovery.
+builder.Services.AddSingleton<DiscoveryRunState>();
+builder.Services.AddHostedService<AutomaticFreelancehuntService>();
+
 var app = builder.Build();
 // Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
 if (args.Contains("--backfill-procurements"))

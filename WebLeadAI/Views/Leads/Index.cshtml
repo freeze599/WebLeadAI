@@ -87,6 +87,25 @@
         sadaļā <a asp-action="Sources">Meklēšanas avoti</a> manuālai pārbaudei.
         Freelancehunt nepieciešama lokālā API atslēga; atradumi sākumā redzami skatā <a asp-action="Index" asp-route-access="unknown" asp-route-source="freelancehunt.com">Piekļuve jāpārbauda — Freelancehunt</a>. Maksas platformu vecie ieraksti saglabāti atsevišķā skatā; noklusējuma sarakstā tie netiek rādīti.
     </div>
+    @{
+        var auto = ((DateTime? LastRunUtc, int Added, string? Message))ViewBag.AutoDiscovery;
+    }
+    <div class="small text-muted mb-3" role="status">
+        <strong>Freelancehunt automātiskā meklēšana:</strong>
+        ik pēc 10 minūtēm (kamēr programma darbojas).
+        @if (auto.LastRunUtc.HasValue)
+        {
+            <span>Pēdējā pārbaude (UTC): @auto.LastRunUtc.Value.ToString("yyyy-MM-dd HH:mm"); jauni: @auto.Added.</span>
+            @if (!string.IsNullOrEmpty(auto.Message))
+            {
+                <span> Piezīme: @auto.Message</span>
+            }
+        }
+        else
+        {
+            <span>Pirmā pārbaude pēc programmas palaišanas.</span>
+        }
+    </div>
     @if (TempData["Success"] != null)
     {
         <div class="alert alert-success">

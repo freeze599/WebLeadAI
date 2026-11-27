@@ -81,12 +81,15 @@
         </a>
     </div>
 
+    <details class="wla-info-disclosure mb-3">
+        <summary>Papildu informācija par meklēšanas avotiem</summary>
     <div class="alert alert-info">
         Automātiskā meklēšana: <strong>SS.com, IUB, Jobicy un Freelancehunt</strong>. SS.com rezultāti tiek atkārtoti izmantoti 30 minūtes;
         pārbauda līdz 20 jaunākajiem programmētāju sludinājumiem. Jobicy meklē līgumdarbus/nepilnu slodzi (līdz 500 inženierijas piedāvājumiem, 30 minūšu kešatmiņa). Hubstaff, Truelancer un Ukrainas avoti pieejami
         sadaļā <a asp-action="Sources">Meklēšanas avoti</a> manuālai pārbaudei.
         Freelancehunt nepieciešama lokālā API atslēga; atradumi sākumā redzami skatā <a asp-action="Index" asp-route-access="unknown" asp-route-source="freelancehunt.com">Piekļuve jāpārbauda — Freelancehunt</a>. Maksas platformu vecie ieraksti saglabāti atsevišķā skatā; noklusējuma sarakstā tie netiek rādīti.
     </div>
+    </details>
     @{
         var auto = ((DateTime? LastRunUtc, int Added, string? Message))ViewBag.AutoDiscovery;
     }
@@ -113,13 +116,57 @@
         </div>
     }
 
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Visi ieraksti</div>
+                    <h3>@ViewBag.TotalCount</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Jāpārskata</div>
+                    <h3>@ViewBag.ReviewCount</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Apstiprināti</div>
+                    <h3 class="text-success">
+                        @ViewBag.QualifiedCount
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-light border-0">
+                <div class="card-body">
+                    <div class="text-muted">Noraidīti</div>
+                    <h3 class="text-danger">
+                        @ViewBag.RejectedCount
+                    </h3>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
     @if (ViewBag.DiscoveryStatistics is List<LeadSourceStatistics> stats)
     {
+        <details class="wla-stats-disclosure mb-4">
+            <summary><span>Pēdējās meklēšanas statistika</span><small>Atvērt tehnisko pārskatu pa avotiem</small></summary>
+
         <p class="small text-muted">Līgumdarbu dati: <a href="https://jobicy.com" target="_blank" rel="noopener noreferrer">Jobicy</a>. Konkrētā darba nosacījumi jāpārbauda oriģinālajā sludinājumā.</p>
     <div class="card shadow-sm mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Pēdējās meklēšanas statistika</h5>
-            </div>
             <div class="table-responsive">
                 <table class="table table-striped align-middle mb-0">
                     <thead class="table-light">
@@ -174,51 +221,8 @@
                 Statistika attiecas uz pēdējo meklēšanu šajā pārlūka sesijā.
             </div>
         </div>
+        </details>
     }
-
-    <div class="row g-3 mb-4">
-
-        <div class="col-md-3">
-            <div class="card bg-light border-0">
-                <div class="card-body">
-                    <div class="text-muted">Visi ieraksti</div>
-                    <h3>@ViewBag.TotalCount</h3>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card bg-light border-0">
-                <div class="card-body">
-                    <div class="text-muted">Jāpārskata</div>
-                    <h3>@ViewBag.ReviewCount</h3>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card bg-light border-0">
-                <div class="card-body">
-                    <div class="text-muted">Apstiprināti</div>
-                    <h3 class="text-success">
-                        @ViewBag.QualifiedCount
-                    </h3>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card bg-light border-0">
-                <div class="card-body">
-                    <div class="text-muted">Noraidīti</div>
-                    <h3 class="text-danger">
-                        @ViewBag.RejectedCount
-                    </h3>
-                </div>
-            </div>
-        </div>
-
-    </div>
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
@@ -417,7 +421,7 @@
         <div class="small text-muted mt-2">Skatu skaitļi un augšējās statusu kartītes aptver visu datubāzi. Pārslēdzot skatu, pārējie filtri tiek notīrīti. Nekas netiek dzēsts; melnraksti un uzrunāšanas vēsture saglabājas.</div>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm wla-project-list">
 
         <div class="card-header bg-white py-3
             d-flex justify-content-between">
@@ -435,7 +439,7 @@
 
         <div class="table-responsive">
             <table class="table table-striped
-                table-hover align-middle mb-0">
+                table-hover align-middle mb-0 wla-project-table">
 
                 <thead class="table-light">
                     <tr>
@@ -483,7 +487,7 @@
                         <tr>
                             <td style="max-width:400px;
                                 overflow-wrap:anywhere;">
-                                <strong>
+                                <strong class="wla-project-name">
                                     @System.Net.WebUtility.HtmlDecode(
                                         lead.CompanyName)
                                 </strong>
@@ -523,7 +527,10 @@
                             </td>
 
                             <td>
-                                <strong class="text-nowrap">@lead.AILeadScore / 100</strong>
+                                <div class="wla-score" aria-label="Prioritāte @lead.AILeadScore no 100">
+                                    <strong>@lead.AILeadScore / 100</strong>
+                                    <div class="wla-score-track" aria-hidden="true"><div class="wla-score-fill @(lead.AILeadScore >= 75 ? "is-high" : lead.AILeadScore >= 50 ? "is-mid" : "is-low")" style="width:@(Math.Clamp(lead.AILeadScore, 0, 100))%"></div></div>
+                                </div>
                                 @if (lead.AILeadScore != evaluation.Score)
                                 {
                                     <div class="small text-warning-emphasis mt-1">
@@ -587,7 +594,7 @@
                             <td>
                                 <a asp-action="Details"
                                    asp-route-id="@lead.Id"
-                                   class="btn btn-sm btn-outline-primary">
+                                   class="btn btn-sm btn-outline-primary wla-open-project">
                                     Apskatīt →
                                 </a>
                             </td>

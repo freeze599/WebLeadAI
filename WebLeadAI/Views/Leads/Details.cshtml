@@ -95,6 +95,7 @@
     <div class="card shadow-sm mb-4">
         <div class="card-body p-4">
 
+            <div class="wla-detail-top">
             <h3 class="mb-3">
                 @displayTitle
             </h3>
@@ -109,7 +110,7 @@
                 </span>
             </div>
 
-            <hr />
+            </div>
 
             @if (isProcurement)
             {
@@ -158,12 +159,12 @@
 
             <h5>Projekta apraksts</h5>
 
-            <div class="border rounded p-3 bg-light mb-4"
+            <div class="border rounded p-3 bg-light mb-4 wla-detail-description"
                  style="white-space:pre-wrap; overflow-wrap:anywhere;">@(string.IsNullOrWhiteSpace(displayDescription) ? "Apraksts nav norādīts." : displayDescription)</div>
 
             <h5>Informācija</h5>
 
-            <dl class="row mt-3">
+            <dl class="row mt-3 wla-detail-metadata">
                 <dt class="col-sm-3">Avota tips</dt>
                 <dd class="col-sm-9">
                     @Model.SourceType
@@ -291,7 +292,7 @@
         </div>
     </div>
 
-    <div class="card shadow-sm mt-4">
+    <div class="card shadow-sm mt-4 wla-proposal-panel">
         <div class="card-body p-4">
             <h5>Pieteikuma melnraksts</h5>
             <p class="text-muted small">

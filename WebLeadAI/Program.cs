@@ -240,6 +240,47 @@ if (args.Contains("--test-outbox-enqueue", StringComparer.OrdinalIgnoreCase) ||
     return;
 }
 
+// Read-only inspection of the latest 15 outbox messages. No server starts, no DB writes.
+// Usage: dotnet run -- --outbox-list
+if (args.Contains("--outbox-list", StringComparer.OrdinalIgnoreCase))
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var messages = await db.LeadEmailOutbox
+            .AsNoTracking()
+            .OrderByDescending(x => x.Id)
+            .Take(15)
+            .ToListAsync();
+
+        Console.WriteLine($"LeadEmailOutbox: pēdējie {messages.Count} ieraksti (tikai lasīšana)");
+        if (messages.Count == 0)
+            Console.WriteLine("Paziņojumu rinda ir tukša.");
+
+        foreach (var item in messages)
+        {
+            var isTest = item.Title.StartsWith("TESTS", StringComparison.OrdinalIgnoreCase) ||
+                         item.SourceUrl.Contains("webleadai_outbox_test=", StringComparison.OrdinalIgnoreCase) ||
+                         item.SourceUrl.Contains("webleadai_outbox_retry_test=", StringComparison.OrdinalIgnoreCase);
+            var status = item.SentAtUtc.HasValue ? "NOSŪTĪTS" :
+                item.NextAttemptUtc > DateTime.UtcNow ? "GAIDA ATKĀRTOŠANU" : "GAIDA NOSŪTĪŠANU";
+            Console.WriteLine($"ID {item.Id} | {(isTest ? "TESTS" : "PROJEKTS")} | {status} | punkti {item.Score} | kļūmes {item.Attempts}");
+            Console.WriteLine($"  Nosaukums: {item.Title}");
+            Console.WriteLine($"  Avots: {item.SourceUrl}");
+            Console.WriteLine($"  Izveidots UTC: {item.CreatedAtUtc:yyyy-MM-dd HH:mm:ss}; nosūtīts UTC: {(item.SentAtUtc.HasValue ? item.SentAtUtc.Value.ToString("yyyy-MM-dd HH:mm:ss") : "nav")}");
+            if (!item.SentAtUtc.HasValue)
+                Console.WriteLine($"  Nākamais mēģinājums UTC: {item.NextAttemptUtc:yyyy-MM-dd HH:mm:ss}; kļūda: {item.LastError ?? "nav"}");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Paziņojumu rindas nolasīšana neizdevās: {ex.GetType().Name}.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 // Vienreizēja esošo IUB ierakstu strukturēšana pēc migrācijas.
 if (args.Contains("--backfill-procurements"))
 {

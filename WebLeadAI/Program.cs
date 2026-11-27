@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WebLeadAI.Security;
 
 using Microsoft.EntityFrameworkCore;
 using WebLeadAI.Data;
@@ -6,7 +10,43 @@ using WebLeadAI.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // MVC
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+{
+    // Protect state-changing MVC requests automatically, including future actions.
+    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+});
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/Login";
+        options.Cookie.Name = "WebLeadAI.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            // APIs should receive 401 rather than an HTML sign-in page.
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        };
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().Build();
+});
+builder.Services.AddSingleton<AdminLoginThrottle>();
 
 
 builder.Services.AddScoped<
@@ -67,6 +107,14 @@ builder.Services.AddHostedService<AutomaticFreelancehuntService>();
 builder.Services.AddHostedService<LeadEmailOutboxWorker>();
 
 var app = builder.Build();
+
+// One-time password-hash generation. Never saves or logs the plaintext password.
+// This exits before any hosted services start or database is accessed.
+if (args.Contains("--generate-admin-hash", StringComparer.OrdinalIgnoreCase))
+{
+    await AdminPasswordSetup.RunAsync();
+    return;
+}
 
 // One-off notification pipeline test. No web server, discovery, or database writes.
 // Run only on explicit request: dotnet run -- --test-email
@@ -331,9 +379,10 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapControllerRoute(
     name: "default",

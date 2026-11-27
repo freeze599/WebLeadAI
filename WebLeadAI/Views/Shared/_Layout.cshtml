@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/webleadai-brand.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/webleadai-ui-v3.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/webleadai-ui-v3.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/WebLeadAI.styles.css" asp-append-version="true" />
 </head>
 <body class="wla-app">
@@ -33,6 +32,12 @@
                         <li class="nav-item"><a class="nav-link" asp-controller="Leads" asp-action="QualificationAudit">Vērtēšanas audits</a></li>
                         <li class="nav-item"><a class="nav-link wla-nav-action" asp-controller="Leads" asp-action="Create">+ Jauns klients</a></li>
                     </ul>
+                    @if (User.Identity?.IsAuthenticated == true)
+                    {
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="ms-lg-3 mt-2 mt-lg-0">
+                            <button type="submit" class="btn btn-outline-info btn-sm">Izrakstīties</button>
+                        </form>
+                    }
                 </div>
             </div>
         </nav>

@@ -1,0 +1,55 @@
+@model WebLeadAI.Models.AdminLoginViewModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Pieslēgties";
+}
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Pieslēgties · WebLeadAI</title>
+    <link rel="icon" type="image/png" href="~/images/webleadai-icon-48.png" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: radial-gradient(ellipse at 30% 10%,#102d50 0%,#071426 45%,#050e1d 100%);
+        font-family: system-ui,-apple-system,Segoe UI,sans-serif; color: #e8f5ff; padding: 22px; }
+      .login { width: min(100%, 430px); background: #10233d; border: 1px solid #2a4967;
+        border-radius: 20px; padding: 34px; box-shadow: 0 18px 70px #0006; }
+      .brand { display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:16px; }
+      .brand img { width:64px; height:64px; object-fit:contain; }
+      .brand strong { font-size: 24px; letter-spacing:-.7px; color:#f0f9ff; }
+      .brand em { color:#54d8e6; font-style:normal; }
+      .hint { text-align:center; font-size:13px; color:#9db7cf; margin:0 0 28px; }
+      label { display:block; font-size:13px; font-weight:600; color:#bdcede; margin-bottom:7px; }
+      input { width:100%; background:#081a30!important; color:#f0f8ff!important;
+        border:1px solid #33516d!important; border-radius:10px!important; padding:12px!important; }
+      input:focus { outline:none; border-color:#4bc8e3!important; box-shadow:0 0 0 3px #1e829133!important; }
+      .field { margin-bottom:19px; }
+      .submit { width:100%; background:#16849e; color:white; border:0; border-radius:10px;
+        padding:13px; font-weight:700; margin-top:7px; }
+      .submit:hover { background:#1b9cb5; }
+      .error { color:#ffb1b8; font-size:13px; margin:8px 0; }
+      .foot { color:#7595b1; text-align:center; font-size:12px; margin-top:22px; }
+    </style>
+</head>
+<body>
+  <main class="login">
+    <div class="brand"><img src="~/images/webleadai-owl.png" alt="" /><strong>WebLead<em>AI</em></strong></div>
+    <p class="hint">Privāta klientu meklēšanas darbvirsma</p>
+    <form asp-controller="Account" asp-action="Login" method="post" autocomplete="on">
+      @Html.AntiForgeryToken()
+      <input type="hidden" asp-for="ReturnUrl" />
+      <div asp-validation-summary="ModelOnly" class="error" role="alert"></div>
+      <div class="field"><label asp-for="UserName">Lietotājvārds</label><input asp-for="UserName" autocomplete="username" autofocus /><span asp-validation-for="UserName" class="error"></span></div>
+      <div class="field"><label asp-for="Password">Parole</label><input asp-for="Password" type="password" autocomplete="current-password" /><span asp-validation-for="Password" class="error"></span></div>
+      <button type="submit" class="submit">Pieslēgties</button>
+    </form>
+    <div class="foot">WebLeadAI · Secure access</div>
+  </main>
+</body>
+</html>

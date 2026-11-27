@@ -93,6 +93,91 @@ if (args.Contains("--test-email", StringComparer.OrdinalIgnoreCase))
     }
     return;
 }
+// Controlled SMTP failure and automatic-recovery test (no real SMTP credentials used on failure).
+// Commands: --test-outbox-retry-prepare / --test-outbox-retry-fail / --test-outbox-retry-status
+const string retryTestUrl = "https://freelancehunt.com/project/development-landing-page-for/1666567.html?webleadai_outbox_retry_test=v8";
+if (args.Any(a => a is "--test-outbox-retry-prepare" or "--test-outbox-retry-fail" or "--test-outbox-retry-status"))
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var row = await db.LeadEmailOutbox.SingleOrDefaultAsync(x => x.SourceUrl == retryTestUrl);
+        if (args.Contains("--test-outbox-retry-prepare"))
+        {
+            if (!builder.Configuration.GetValue("LeadNotifications:Enabled", false))
+            {
+                Console.WriteLine("Paziņojumi nav ieslēgti. Tests netika sākts.");
+                return;
+            }
+            if (row is null)
+            {
+                if (await db.LeadEmailOutbox.AnyAsync(x => x.SentAtUtc == null))
+                {
+                    Console.WriteLine("Rindā jau ir īsti nenosūtīti ziņojumi. Testu neveidojam, vispirms apstrādā tos.");
+                    return;
+                }
+                row = new WebLeadAI.Models.LeadEmailOutbox
+                {
+                    SourceUrl = retryTestUrl,
+                    Title = "TESTS — WebLeadAI SMTP kļūmes atkopšana (NAV jauns projekts)",
+                    Score = 100,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    NextAttemptUtc = DateTime.UtcNow
+                };
+                db.LeadEmailOutbox.Add(row);
+                await db.SaveChangesAsync();
+                Console.WriteLine($"Izveidots tikai testa paziņojums ID {row.Id}. Izpildi --test-outbox-retry-fail.");
+            }
+            else Console.WriteLine($"Testa ieraksts jau eksistē (ID {row.Id}); dublikāts netika izveidots.");
+        }
+        else if (args.Contains("--test-outbox-retry-fail"))
+        {
+            if (row is null || row.Attempts != 0 || row.SentAtUtc is not null)
+            {
+                Console.WriteLine("Nav svaiga testa ieraksta. Vispirms izpildi --test-outbox-retry-prepare; vecos ierakstus nepārrakstām.");
+                return;
+            }
+            // Intentionally unreachable localhost SMTP. No real Gmail secret is read or changed.
+            var simulatedFailureConfig = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["LeadNotifications:Enabled"] = "true",
+                    ["LeadNotifications:MinimumScore"] = "60",
+                    ["LeadNotifications:To"] = "test@example.com",
+                    ["LeadNotifications:From"] = "test@example.com",
+                    ["LeadNotifications:Smtp:Host"] = "127.0.0.1",
+                    ["LeadNotifications:Smtp:Port"] = "1",
+                    ["LeadNotifications:Smtp:Username"] = "test",
+                    ["LeadNotifications:Smtp:Password"] = "test-only-invalid"
+                }).Build();
+            var fakeSender = new NewLeadEmailNotifier(simulatedFailureConfig,
+                app.Services.GetRequiredService<ILogger<NewLeadEmailNotifier>>());
+            var testWorker = new LeadEmailOutboxWorker(
+                app.Services.GetRequiredService<IServiceScopeFactory>(), fakeSender,
+                builder.Configuration, app.Services.GetRequiredService<ILogger<LeadEmailOutboxWorker>>());
+            await testWorker.ProcessTestItemOnceAsync(row.Id, fakeSender, CancellationToken.None);
+            // Reload DB-tracked row after the worker's separate scope updated it.
+            db.Entry(row).State = EntityState.Detached;
+            row = await db.LeadEmailOutbox.SingleAsync(x => x.SourceUrl == retryTestUrl);
+            Console.WriteLine(row.Attempts == 1 && row.SentAtUtc is null
+                ? $"SIMULĒTĀ KĻŪME REĢISTRĒTA. ID {row.Id}; nākamais mēģinājums UTC: {row.NextAttemptUtc:yyyy-MM-dd HH:mm:ss}. Palaid parasto dotnet run."
+                : "Negaidīts statuss. Pārbaudi --test-outbox-retry-status.");
+        }
+        if (args.Contains("--test-outbox-retry-status"))
+        {
+            if (row is null) Console.WriteLine("Testa ieraksta nav.");
+            else Console.WriteLine($"ID {row.Id}; nosūtīts: {row.SentAtUtc.HasValue}; kļūmes: {row.Attempts}; kļūdas veids: {row.LastError ?? "nav"}; nākamais mēģinājums UTC: {row.NextAttemptUtc:yyyy-MM-dd HH:mm:ss}");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Atkopšanas testa kļūda: {ex.GetType().Name}.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
 // One-off, opt-in outbox integration test. Does not create a Lead or run discovery.
 // Enqueue once: dotnet run -- --test-outbox-enqueue
 // Inspect:      dotnet run -- --test-outbox-status

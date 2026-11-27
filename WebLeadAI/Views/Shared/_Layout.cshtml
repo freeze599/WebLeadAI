@@ -1,46 +1,44 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="lv">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - WebLeadAI</title>
+    <meta name="theme-color" content="#101c34" />
+    <title>@ViewData["Title"] · WebLeadAI</title>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/WebLeadAI.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">WebLeadAI</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
+<body class="wla-app">
+    <header class="wla-header">
+        <nav class="navbar navbar-expand-lg navbar-dark wla-navbar" aria-label="Galvenā navigācija">
+            <div class="container-fluid wla-header-inner">
+                <a class="navbar-brand wla-brand" asp-controller="Leads" asp-action="Index">
+                    <span class="wla-brand-mark" aria-hidden="true">W</span>
+                    <span class="wla-brand-text">WebLead<span>AI</span><small>CLIENT DISCOVERY</small></span>
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#wlaNavigation" aria-controls="wlaNavigation" aria-expanded="false" aria-label="Atvērt navigāciju">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
+                <div id="wlaNavigation" class="collapse navbar-collapse">
+                    <ul class="navbar-nav ms-lg-auto align-items-lg-center gap-lg-2">
+                        <li class="nav-item"><a class="nav-link" asp-controller="Leads" asp-action="Index">Projektu panelis</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Leads" asp-action="Sources">Avoti</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-controller="Leads" asp-action="QualificationAudit">Vērtēšanas audits</a></li>
+                        <li class="nav-item"><a class="nav-link wla-nav-action" asp-controller="Leads" asp-action="Create">+ Jauns klients</a></li>
                     </ul>
                 </div>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
+    <div class="wla-shell">
+        <main role="main" class="wla-main">
             @RenderBody()
         </main>
     </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - WebLeadAI - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
+    <footer class="wla-footer">
+        <div class="wla-footer-inner"><span>© 2026 WebLeadAI</span><span>Potenciālo klientu atklāšana un atlase</span></div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

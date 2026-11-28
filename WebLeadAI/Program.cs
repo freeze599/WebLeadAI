@@ -1,3 +1,7 @@
+
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +12,36 @@ using WebLeadAI.Data;
 using WebLeadAI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+// Trust forwarded headers only from local Nginx.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownProxies.Add(IPAddress.Parse("127.0.0.1"));
+    options.ForwardLimit = 1;
+});
+
+// Keep authentication cookies readable across service restarts and deployments.
+// In production set DataProtection__KeysPath to a persistent, private directory.
+var dataProtectionKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    if (!Path.IsPathFullyQualified(dataProtectionKeysPath))
+        throw new InvalidOperationException("DataProtection:KeysPath must be an absolute path.");
+
+    builder.Services.AddDataProtection()
+        .SetApplicationName("WebLeadAI")
+        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+else if (!builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Production requires DataProtection__KeysPath pointing to a persistent, private directory.");
+}
 
 // MVC
 builder.Services.AddControllersWithViews(options =>
@@ -369,6 +403,9 @@ if (args.Contains("--cleanup-descriptions-preview") ||
 }
 
 
+
+// Process trusted Nginx headers before HTTPS and authentication.
+app.UseForwardedHeaders();
 
 if (!app.Environment.IsDevelopment())
 {

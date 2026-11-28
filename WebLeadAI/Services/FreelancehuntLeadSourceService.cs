@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 namespace WebLeadAI.Services;
 
 // Read-only API integration: no bids, messages or account changes.
-public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfiguration configuration)
+public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfiguration configuration, ILogger<FreelancehuntLeadSourceService> logger)
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static RssFeedResult? cached;
@@ -33,7 +33,12 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
         await Gate.WaitAsync();
         try
         {
-            if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil) return cached;
+            if (cached != null && cachedKey == key && DateTime.UtcNow < cacheUntil)
+            {
+                logger.LogInformation("FH_DIAG API cache: nolasīti={Read}, kandidāti={Candidates}, kļūda={Error}",
+                    cached.Items.Count, cached.Items.Count(x => x.IsCandidate), cached.Error ?? "nav");
+                return cached;
+            }
             var result = new RssFeedResult { Source = "Freelancehunt" };
             int omitted = 0, detailCount = 0, plus = 0, incomplete = 0, unknownPlus = 0, received = 0, checkedPages = 0;
             int highCompetition = 0, bidsUnknown = 0, recentCandidates = 0;
@@ -131,6 +136,15 @@ public sealed class FreelancehuntLeadSourceService(HttpClient client, IConfigura
                 (candidateReasons.Count > 0 ? "Neatbilstošu projektu iemesli: " + string.Join("; ", candidateReasons.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 (skipped.Count > 0 ? "Izlaisti: " + string.Join("; ", skipped.Select(x => $"{x.Key}: {x.Value}")) + ". " : "") +
                 "Profila pieteikšanās piekļuve vēl jāpārbauda — atradumus skaties sadaļā ‘Piekļuve jāpārbauda’, avots freelancehunt.com. Pieteikumi netiek sūtīti.";
+            logger.LogInformation(
+                "FH_DIAG API: saņemti={Received}, nolasīti={Read}, kandidāti={Candidates}, " +
+                "nekandidāti={NonCandidates}, izlaisti={Skipped}, detaļuPieprasījumi={Details}, lapas={Pages}, " +
+                "neatbilstošieIemesli={CandidateReasons}, izlaišanasIemesli={SkipReasons}, kļūda={Error}",
+                received, result.Items.Count, result.Items.Count(x => x.IsCandidate),
+                result.Items.Count(x => !x.IsCandidate), omitted, detailCount, checkedPages,
+                candidateReasons.Count == 0 ? "nav" : string.Join("; ", candidateReasons.Select(x => $"{x.Key}: {x.Value}")),
+                skipped.Count == 0 ? "nav" : string.Join("; ", skipped.Select(x => $"{x.Key}: {x.Value}")),
+                result.Error ?? "nav");
             cached = result; cachedKey = key;
             // Shorter successful cache favors new projects while still avoiding repeated API calls.
             cacheUntil = DateTime.UtcNow.Add(!requestFailed && formatFailures == 0 ? TimeSpan.FromMinutes(10) : retry);

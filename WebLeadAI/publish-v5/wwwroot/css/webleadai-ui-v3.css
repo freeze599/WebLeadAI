@@ -1,0 +1,44 @@
+/* WebLeadAI UI v3 — project list and details. Presentation-only overrides. */
+.wla-main .wla-project-list { border:1px solid #2d4669!important; overflow:hidden; }
+.wla-main .wla-project-list>.card-header { padding:19px 22px!important; display:flex; align-items:center; gap:18px; }
+.wla-main .wla-project-list>.card-header h5 { font-size:1.04rem; letter-spacing:.01em; }
+.wla-main .wla-project-list .table-responsive { scrollbar-color:#40628a #0b1930; }
+.wla-main .wla-project-table { min-width:1050px; }
+.wla-main .wla-project-table thead th { padding:16px 13px!important; font-size:10px!important; letter-spacing:.075em; }
+.wla-main .wla-project-table tbody tr { transition:background-color .15s ease; }
+.wla-main .wla-project-table tbody td { padding:17px 13px!important; }
+.wla-main .wla-project-table tbody tr:hover { --bs-table-bg:#1a3352; }
+.wla-main .wla-project-name { display:block; font-size:13px; font-weight:750; line-height:1.48; color:#f0f7ff; max-width:295px; }
+.wla-main .wla-project-table .badge { font-size:10px; padding:6px 8px; border-radius:6px; white-space:normal; line-height:1.25; }
+.wla-main .wla-project-table .badge.bg-info { background:#13445e!important; color:#a0e9fa!important; border:1px solid #24627f; }
+.wla-main .wla-project-table .badge.bg-primary { background:#204b9b!important; color:#e4efff!important; }
+.wla-main .wla-project-table .badge.bg-warning { color:#291d06!important; }
+.wla-main .wla-project-table details { max-width:245px; color:#9db6d2; }
+.wla-main .wla-project-table details summary { cursor:pointer; color:#8bd5f7; font-size:11px; }
+.wla-main .wla-project-table details[open] { background:#0b1c34; border:1px solid #2d4b6b; border-radius:8px; padding:9px; margin-top:7px!important; }
+.wla-main .wla-project-table .wla-score { display:inline-flex; flex-direction:column; gap:7px; min-width:84px; }
+.wla-main .wla-score strong { font-size:15px; font-variant-numeric:tabular-nums; color:#e7f3ff; }
+.wla-main .wla-score-track { background:#243856; height:5px; border-radius:10px; overflow:hidden; }
+.wla-main .wla-score-fill { height:100%; border-radius:10px; background:#73a6fc; }
+.wla-main .wla-score-fill.is-high { background:#34d7bd; }
+.wla-main .wla-score-fill.is-mid { background:#e9bb60; }
+.wla-main .wla-score-fill.is-low { background:#e77b95; }
+.wla-main .wla-project-table .wla-open-project { white-space:nowrap; border-color:#4c83c7; color:#b5dbff; font-weight:700; }
+.wla-main .wla-project-table .wla-open-project:hover { background:#2763ad; color:#fff; }
+.wla-main .wla-detail-top { border:1px solid #305578; background:linear-gradient(120deg,#172e4d,#10223c); border-radius:16px; padding:22px 24px; margin-bottom:22px; box-shadow:inset 0 1px 0 rgba(150,210,255,.07); }
+.wla-main .wla-detail-top h3 { font-size:clamp(1.35rem,2.4vw,2rem); line-height:1.35; overflow-wrap:anywhere; }
+.wla-main .wla-detail-top .badge { padding:8px 11px; border-radius:7px; }
+.wla-main .wla-detail-description { background:#0b1b32!important; border:1px solid #334d70!important; color:#dcecff; font-size:14px; line-height:1.8; padding:21px!important; }
+.wla-main .wla-detail-metadata { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px 22px; margin:18px 0; }
+.wla-main .wla-detail-metadata dt { color:#a2b9d8; font-size:12px; font-weight:650; }
+.wla-main .wla-detail-metadata dd { color:#f0f6ff; font-size:13px; overflow-wrap:anywhere; }
+.wla-main .wla-proposal-panel { border-color:#335d7d!important; box-shadow:0 12px 35px rgba(0,0,0,.2)!important; }
+.wla-main .wla-proposal-panel textarea { min-height:280px; line-height:1.65; font-size:14px; }
+.wla-main .wla-project-list .card-header .text-muted { margin-left:auto; }
+@media (max-width:767px) {
+  .wla-main .wla-project-list>.card-header { padding:16px!important; }
+  .wla-main .wla-project-table { min-width:940px; }
+  .wla-main .wla-detail-top { padding:16px; }
+  .wla-main .wla-detail-metadata { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce) { .wla-main .wla-project-table tbody tr { transition:none; } }

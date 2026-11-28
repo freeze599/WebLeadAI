@@ -83,13 +83,22 @@ namespace WebLeadAI.Services
 
                 report.Add(stats);
 
+                int missingUrls = 0;
+                int nonCandidates = 0;
+                int qualificationRejected = 0;
+                int emailQueued = 0;
+
                 foreach (var item in feed.Items)
                 {
                     if (string.IsNullOrWhiteSpace(item.Url))
+                    {
+                        missingUrls++;
                         continue;
+                    }
 
                     if (!item.IsCandidate || (feed.Source == "SS.com" && !SsLeadReader.IsProjectRequest(item.Title, item.Description)))
                     {
+                        if (!item.IsCandidate) nonCandidates++;
                         if (knownUrls.ContainsKey(item.Url)) stats.Duplicates++;
                         else stats.Rejected++;
                         continue;
@@ -148,6 +157,7 @@ namespace WebLeadAI.Services
 
                     if (!evaluation.IsQualified)
                     {
+                        qualificationRejected++;
                         stats.Rejected++;
                         continue;
                     }
@@ -185,6 +195,7 @@ namespace WebLeadAI.Services
                         (alertUri.Host.Equals("freelancehunt.com", StringComparison.OrdinalIgnoreCase) ||
                          alertUri.Host.EndsWith(".freelancehunt.com", StringComparison.OrdinalIgnoreCase)))
                     {
+                        emailQueued++;
                         _context.LeadEmailOutbox.Add(new LeadEmailOutbox
                         {
                             SourceUrl = item.Url,
@@ -195,6 +206,19 @@ namespace WebLeadAI.Services
                             NextAttemptUtc = DateTime.UtcNow
                         });
                     }
+                }
+
+                if (feed.Source == "Freelancehunt")
+                {
+                    _logger.LogInformation(
+                        "FH_DIAG ATLASE: režīms={Mode}, nolasīti={Read}, kandidātaStatussNoraidīts={NonCandidates}, " +
+                        "bezURL={MissingUrls}, kvalifikācijāNoraidīti={QualificationRejected}, " +
+                        "kvalificēti={Qualified}, dublikāti={Duplicates}, noraidītiKopā={Rejected}, " +
+                        "jauni={Added}, epastiRindā={Queued}, avotaKļūda={Error}",
+                        freelancehuntOnly ? "automātisks" : "manuāls", stats.Read,
+                        nonCandidates, missingUrls, qualificationRejected, stats.Qualified,
+                        stats.Duplicates, stats.Rejected, stats.Added, emailQueued,
+                        stats.Error ?? "nav");
                 }
             }
 
